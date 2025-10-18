@@ -75,3 +75,20 @@ export type AuthStackParamList = {
   CreatePassword: { email: string };
   Home: undefined;
 };
+
+export type AppStackParamList = {
+  Main: undefined;
+  Home: undefined;
+};
+
+export type ProfileStackParamList = {
+  ProfileMain: undefined;
+};
+
+export type BottomTabParamList = {
+  Listing: undefined;
+  Followers: undefined;
+  Chats: undefined;
+  MyTasks: undefined;
+  Profile: undefined;
+};

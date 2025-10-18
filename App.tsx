@@ -6,7 +6,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
       <AppNavigator />
     </AuthProvider>
   );
