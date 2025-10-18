@@ -22,7 +22,7 @@ export const authAPI = {
 
   verifyOtp: async (data: VerifyOtpRequest): Promise<string> => {
     const response = await apiClient.post('/Account/verify-otp', data, {
-      transformResponse: [(data) => data] // Keep as string, don't parse JSON
+      transformResponse: [(data) => data] 
     });
     return response.data;
   },

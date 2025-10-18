@@ -1,6 +1,6 @@
 export const USER_PROFILE_TYPES = {
     BUYER: 1,
-    SELLER: 2,
+    SELLER: 1,
     AGENT: 3
   } as const;
   

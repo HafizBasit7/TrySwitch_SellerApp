@@ -15,16 +15,19 @@ import CreatePasswordScreen from '../screens/CreatePasswordScreen';
 
 // App Screens
 import HomeScreen from '../screens/HomeScreen';
+import OtpResetPasswordScreen from '../screens/OtpResetPasswordScreen';
 
 const Stack = createStackNavigator<AuthStackParamList>();
 
 const AuthStack = () => {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Splash">
+      <Stack.Screen name="Splash" component={SplashScreen} />
       <Stack.Screen name="SignIn" component={SignInScreen} />
       <Stack.Screen name="SignUp" component={SignUpScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
       <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+      <Stack.Screen name="OtpResetPassword" component={OtpResetPasswordScreen} />
       <Stack.Screen name="Otp" component={OtpScreen} />
       <Stack.Screen name="CreatePassword" component={CreatePasswordScreen} />
     </Stack.Navigator>

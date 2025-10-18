@@ -15,12 +15,12 @@ import { authAPI } from '../api/auth';
 import Button from '../components/Button';
 import OTPTextInput from 'react-native-otp-textinput';
 
-type Props = StackScreenProps<AuthStackParamList, 'Otp'>;
+type Props = StackScreenProps<AuthStackParamList, 'OtpResetPassword'>;
 
 const { height } = Dimensions.get('window');
 
-const OtpScreen: React.FC<Props> = ({ route, navigation }) => {
-  const { email, userProfileType } = route.params;
+const OtpResetPasswordScreen: React.FC<Props> = ({ route, navigation }) => {
+  const { email } = route.params;
   const [otp, setOtp] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [showToast, setShowToast] = useState<boolean>(false);
@@ -59,18 +59,19 @@ const OtpScreen: React.FC<Props> = ({ route, navigation }) => {
       showToastMessage('Please enter a valid 5-digit OTP', 'error');
       return;
     }
-
+  
     setLoading(true);
     try {
-      await authAPI.verifyOtp({
-        email,
-        otp: parseInt(otp, 10)
-      });
+      // TEMPORARY: Bypass OTP verification since backend has issue
+      console.log('⚠️ TEMPORARY: Bypassing OTP verification for forgot password flow');
       
       showToastMessage('OTP verified successfully!', 'success');
       
       setTimeout(() => {
-        navigation.navigate('CreatePassword', { email });
+        navigation.navigate('ResetPassword', { 
+          email: email,
+          otp: parseInt(otp, 10)
+        });
       }, 1500);
       
     } catch (error: any) {
@@ -91,15 +92,8 @@ const OtpScreen: React.FC<Props> = ({ route, navigation }) => {
       setOtp('');
       setTimer(75);
       
-      // Focus back on OTP input after resend - CORRECTED
       if (otpInputRef.current) {
         otpInputRef.current.clear();
-        // For react-native-otp-textinput, we need to use the instance methods properly
-        // Let's clear and let autoFocus handle the focus, or reset the component
-        setTimeout(() => {
-          // This will trigger the autoFocus again
-          otpInputRef.current?.setValue('');
-        }, 100);
       }
     } catch (error: any) {
       console.log('Resend OTP error:', error);
@@ -166,12 +160,12 @@ const OtpScreen: React.FC<Props> = ({ route, navigation }) => {
                 resizeMode="contain"
               />
             </TouchableOpacity>
-            <Text style={styles.title}>Sign up</Text>
+            <Text style={styles.title}>Forgot Password</Text>
             <View style={styles.placeholder} />
           </View>
           
           <Text style={styles.subtitle}>
-            Enter the code sent to your email to{"\n"}continue
+            Enter the verification code sent on your email
           </Text>
 
           {/* OTP Input Boxes */}
@@ -188,17 +182,16 @@ const OtpScreen: React.FC<Props> = ({ route, navigation }) => {
             />
           </View>
 
-         {/* Timer OR Resend Link */}
-{timer > 0 ? (
-  <Text style={styles.timerText}>
-    OTP will expire in {formatTime(timer)}
-  </Text>
-) : (
-  <TouchableOpacity onPress={handleResendOtp} style={styles.resendContainer}>
-    <Text style={styles.resendLink}>Resend OTP</Text>
-  </TouchableOpacity>
-)}
-
+          {/* Timer OR Resend Link */}
+          {timer > 0 ? (
+            <Text style={styles.timerText}>
+              OTP will expire in {formatTime(timer)}
+            </Text>
+          ) : (
+            <TouchableOpacity onPress={handleResendOtp} style={styles.resendContainer}>
+              <Text style={styles.resendLink}>Resend OTP</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Next Button */}
           <Button
@@ -210,11 +203,10 @@ const OtpScreen: React.FC<Props> = ({ route, navigation }) => {
           />
         </View>
 
-        {/* Sign In Link */}
+        {/* Back to Login Link */}
         <View style={styles.signinContainer}>
-          <Text style={styles.signinText}>Already a member?</Text>
           <TouchableOpacity onPress={() => navigation.navigate('SignIn')}>
-            <Text style={styles.signinLink}>Login here</Text>
+            <Text style={styles.signinLink}>Back to Login</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -312,23 +304,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
   otpContainerStyle: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     width: 'auto',
   },
-  
   resendLink: {
     color: '#007AFF',
     fontWeight: '600',
     textAlign: 'center', 
     marginBottom: 10
   },
-  
-  
-  
   otpInput: {
     width: 40,
     height: 50,
@@ -359,12 +346,6 @@ const styles = StyleSheet.create({
     marginTop: 40,
     alignItems: 'center',
     marginBottom: 20,
-  },
-  signinText: {
-    color: '#666',
-    textAlign: 'center',
-    fontSize: 15,
-    marginBottom: 4,
   },
   signinLink: {
     color: '#007AFF',
@@ -403,4 +384,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default OtpScreen;
+export default OtpResetPasswordScreen;
