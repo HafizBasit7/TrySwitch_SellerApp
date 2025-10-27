@@ -1,5 +1,7 @@
+// axiosConfig.ts
 import axios from 'axios';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../utils/constants';
 
 const apiClient = axios.create({
@@ -12,9 +14,16 @@ const apiClient = axios.create({
   },
 });
 
-// Enhanced request interceptor
+// Enhanced request interceptor to automatically add token
 apiClient.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    // Get token from AsyncStorage
+    const userToken = await AsyncStorage.getItem('userToken');
+    
+    if (userToken) {
+      config.headers.Authorization = `Bearer ${userToken}`;
+    }
+
     console.log('🚀 API Request:', config.method?.toUpperCase(), config.url);
     console.log('📦 Request Headers:', config.headers);
     console.log('📤 Request Data:', config.data);
@@ -26,7 +35,7 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Enhanced response interceptor
+// Enhanced response interceptor with token expiration handling
 apiClient.interceptors.response.use(
   (response) => {
     console.log('✅ API Response:', response.status, response.data);
@@ -41,8 +50,19 @@ apiClient.interceptors.response.use(
       url: error.config?.url,
       method: error.config?.method,
     });
+
+    // Handle token expiration
+    if (error.response?.status === 401) {
+      console.log('🔄 Token expired, logging out...');
+      // You can trigger automatic logout here if needed
+      // This would require passing a logout function to the interceptor
+    }
+
     return Promise.reject(error);
-  }
+  },
+
+
+  
 );
 
 export default apiClient;

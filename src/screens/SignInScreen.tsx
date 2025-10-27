@@ -68,7 +68,7 @@ const SignInScreen: React.FC<Props> = ({ navigation }) => {
       
       if (response.token) {
         await signIn(response.token);
-        console.log('✅ Token saved to AuthContext - should navigate to Home automatically');
+        // console.log('✅ Token saved to AuthContext - should navigate to Home automatically');
       } else {
         showToastMessage('No token received from server. Please try again.', 'error');
       }
