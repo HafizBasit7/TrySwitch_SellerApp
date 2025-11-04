@@ -38,27 +38,35 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
   const [videoPaused, setVideoPaused] = useState(true);
   const [showAllDetails, setShowAllDetails] = useState(false);
   const [currentPlayingVideoIndex, setCurrentPlayingVideoIndex] = useState<number | null>(null);
+  const [inlineVideoPaused, setInlineVideoPaused] = useState<{ [key: number]: boolean }>({});
   const videoRef = useRef<Video>(null);
+  const fullScreenVideoRef = useRef<Video>(null);
 
   const formatPrice = (price: number) => {
     return `$${price?.toLocaleString() || '0'}`;
   };
 
-  // FIXED: Handle video play in container first
-  const handlePlayVideo = (videoUrl: string, index: number) => {
-    setCurrentPlayingVideoIndex(index);
-    setVideoPaused(false);
+  // Toggle inline video play/pause
+  const handleToggleInlineVideo = (index: number) => {
+    setInlineVideoPaused(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
   };
 
-  // FIXED: Handle opening full screen from container
-  const handleOpenFullScreen = (videoUrl: string) => {
+  // Open full screen video
+  const handleOpenFullScreen = (videoUrl: string, index: number) => {
     setPlayingVideo(videoUrl);
-    setVideoPaused(false);
+    setCurrentPlayingVideoIndex(index);
+    // Pause inline video when opening fullscreen
+    setInlineVideoPaused(prev => ({
+      ...prev,
+      [index]: true
+    }));
   };
 
   const handleCloseVideo = () => {
     setPlayingVideo(null);
-    setCurrentPlayingVideoIndex(null);
     setVideoPaused(true);
   };
 
@@ -68,13 +76,11 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
     handleCloseVideo();
   };
 
-  // FIXED: Better function to generate thumbnail URL
+  // Generate video thumbnail URL
   const getVideoThumbnail = (videoUrl: string): string => {
     if (!videoUrl) return '';
     
-    // If it's a Cloudinary URL, try to get the thumbnail
     if (videoUrl.includes('cloudinary.com') && videoUrl.includes('/video/')) {
-      // Replace /video/ with /image/ and change format to jpg
       return videoUrl
         .replace('/video/upload/', '/image/upload/')
         .replace('.mp4', '.jpg')
@@ -82,8 +88,6 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
         .replace('.avi', '.jpg');
     }
     
-    // If it's a direct video URL, you might need a different approach
-    // For now, return empty string and handle it in the component
     return '';
   };
 
@@ -152,7 +156,6 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
   const images = listing.siteOrPropertyImages || [];
   const totalImages = images.length;
 
-  // Define all details - FIXED: Format multi-value fields properly
   const allDetails = [
     { label: 'Bedroom', value: String(listing.bedrooms).padStart(2, '0'), icon: 'bed' },
     { label: 'Bathroom', value: String(listing.bathrooms).padStart(2, '0'), icon: 'bath' },
@@ -171,9 +174,11 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
     },
     { label: 'Price/sqft', value: `$${listing.pricePerSquareFoot || 0}`, icon: 'dollar' },
     { label: 'Year Built', value: listing.yearBuilt, icon: 'calendar' },
+    { label: 'Market Value', value: listing.networth, icon: 'checkmark' },
+    { label: 'Rehab Estimate', value: listing.rehabEstimate, icon: 'listing' },
+    { label: 'Avg Lease Price', value: listing.averageLeasePrice, icon: 'price' },
   ];
 
-  // Show only first 3 details initially, show all when "See More" is pressed
   const detailsToShow = showAllDetails ? allDetails : allDetails.slice(0, 3);
 
   const renderFullScreenVideo = () => {
@@ -192,72 +197,84 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
           </TouchableOpacity>
           
           <Video
-            ref={videoRef}
+            ref={fullScreenVideoRef}
             source={{ uri: playingVideo }}
             style={styles.fullScreenVideoPlayer}
             resizeMode="contain"
             paused={videoPaused}
-            controls={true}
+            controls={false}
+            poster={getVideoThumbnail(playingVideo)}
+            posterResizeMode="contain"
             onError={handleVideoError}
-            onEnd={handleCloseVideo}
+            onEnd={() => setVideoPaused(true)}
             ignoreSilentSwitch="obey"
+            playInBackground={false}
+            playWhenInactive={false}
           />
+
+          {/* Custom Play/Pause Button for Fullscreen */}
+          <TouchableOpacity 
+            style={styles.fullScreenPlayPauseButton}
+            onPress={() => setVideoPaused(!videoPaused)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.fullScreenPlayPauseCircle}>
+              <Text style={styles.fullScreenPlayPauseIcon}>
+                {videoPaused ? '▶' : '❚❚'}
+              </Text>
+            </View>
+          </TouchableOpacity>
         </View>
       </Modal>
     );
   };
 
-  // FIXED: Improved media item rendering
   const renderMediaItem = (item: string, index: number) => {
     const isVideo = item.includes('/video/') || item.endsWith('.mp4') || item.endsWith('.mov') || item.endsWith('.avi');
     const thumbnailUrl = getVideoThumbnail(item);
-    const isCurrentlyPlaying = currentPlayingVideoIndex === index;
+    const isVideoPaused = inlineVideoPaused[index] !== false; // Default to paused
 
     if (isVideo) {
       return (
         <View key={index} style={styles.mediaItemContainer}>
-          {/* Show video player when playing, otherwise show thumbnail */}
-          {isCurrentlyPlaying ? (
-            <View style={styles.videoContainer}>
-              <Video
-                source={{ uri: item }}
-                style={styles.videoPlayer}
-                resizeMode="cover"
-                paused={videoPaused}
-                controls={true}
-                onError={handleVideoError}
-              />
-              <TouchableOpacity 
-                style={styles.fullScreenButton}
-                onPress={() => handleOpenFullScreen(item)}
-              >
-                <Text style={styles.fullScreenButtonIcon}>⛶</Text>
-              </TouchableOpacity>
+          {/* Video Player - Always rendered */}
+          <Video
+            source={{ uri: item }}
+            style={styles.videoPlayer}
+            resizeMode="cover"
+            paused={isVideoPaused}
+            controls={false}
+            poster={thumbnailUrl}
+            posterResizeMode="cover"
+            onError={handleVideoError}
+            repeat={false}
+            ignoreSilentSwitch="obey"
+            playInBackground={false}
+            playWhenInactive={false}
+          />
+
+          {/* Center Play/Pause Button */}
+          <TouchableOpacity 
+            style={styles.centerPlayPauseButton}
+            onPress={() => handleToggleInlineVideo(index)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.playPauseCircle}>
+              <Text style={styles.playPauseIcon}>
+                {isVideoPaused ? '▶' : '❚❚'}
+              </Text>
             </View>
-          ) : (
-            <>
-              {/* Show thumbnail */}
-              {thumbnailUrl ? (
-                <Image
-                  source={{ uri: thumbnailUrl }}
-                  style={styles.propertyImage}
-                  resizeMode="cover"
-                  onError={() => console.log('Thumbnail load failed for:', thumbnailUrl)}
-                />
-              ) : (
-                <View style={[styles.propertyImage, styles.videoPlaceholder]}>
-                  <Text style={styles.videoPlaceholderText}>Video</Text>
-                </View>
-              )}
-              
-              {/* Play button overlay */}
-              <TouchableOpacity 
-                style={styles.playButton}
-                onPress={() => handlePlayVideo(item, index)}
-              >
-                <Text style={styles.playButtonIcon}>▶</Text>
-              </TouchableOpacity>
-            </>
+          </TouchableOpacity>
+
+          {/* Fullscreen Button - Only show when video is playing */}
+          {!isVideoPaused && (
+            <TouchableOpacity 
+              style={styles.fullScreenButton}
+              onPress={() => handleOpenFullScreen(item, index)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.fullScreenButtonIcon}>⛶</Text>
+            </TouchableOpacity>
           )}
         </View>
       );
@@ -291,11 +308,14 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
                 event.nativeEvent.contentOffset.x / width
               );
               setCurrentImageIndex(slideIndex);
-              // Stop video when scrolling away
-              if (currentPlayingVideoIndex !== null && currentPlayingVideoIndex !== slideIndex) {
-                setCurrentPlayingVideoIndex(null);
-                setVideoPaused(true);
-              }
+              // Pause all videos when scrolling
+              setInlineVideoPaused(prev => {
+                const newState = { ...prev };
+                Object.keys(newState).forEach(key => {
+                  newState[parseInt(key)] = true;
+                });
+                return newState;
+              });
             }}
             scrollEventThrottle={16}
           >
@@ -353,9 +373,7 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
           <View style={styles.actionButtonsContainer}>
             <TouchableOpacity
               style={styles.editButton}
-              onPress={() =>
-                navigation.navigate('EditListing', { listing })
-              }
+              onPress={() => navigation.navigate('EditListing', { listing })}
               disabled={isProcessing}
             >
               <Text style={styles.editButtonText}>Edit Listing</Text>
@@ -388,70 +406,66 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
             </TouchableOpacity>
           </View>
 
-         {/* Details Section - Show simple list when not expanded */}
-<View style={styles.detailsSection}>
-  <View style={styles.detailsHeader}>
-    <Text style={styles.detailsTitle}>Details</Text>
-    {allDetails.length > 3 && (
-      <TouchableOpacity onPress={() => setShowAllDetails(!showAllDetails)}>
-        <Text style={styles.seeMoreText}>
-          {showAllDetails ? 'See Less' : 'See All'}
-        </Text>
-      </TouchableOpacity>
-    )}
-  </View>
+          {/* Details Section */}
+          <View style={styles.detailsSection}>
+            <View style={styles.detailsHeader}>
+              <Text style={styles.detailsTitle}>Details</Text>
+              {allDetails.length > 3 && (
+                <TouchableOpacity onPress={() => setShowAllDetails(!showAllDetails)}>
+                  <Text style={styles.seeMoreText}>
+                    {showAllDetails ? 'See Less' : 'See All'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
-  {showAllDetails ? (
-    // Expanded view - show all details with icons
-    detailsToShow.map((detail, index) => (
-      <View key={index} style={styles.detailItem}>
-        <View style={styles.detailLeftSection}>
-          <View style={styles.detailIconContainer}>
-            <Image
-              source={getIconSource(detail.icon)}
-              style={styles.detailIcon}
-              resizeMode="contain"
-            />
+            {showAllDetails ? (
+              detailsToShow.map((detail, index) => (
+                <View key={index} style={styles.detailItem}>
+                  <View style={styles.detailLeftSection}>
+                    <View style={styles.detailIconContainer}>
+                      <Image
+                        source={getIconSource(detail.icon)}
+                        style={styles.detailIcon}
+                        resizeMode="contain"
+                      />
+                    </View>
+                    <Text style={styles.detailLabel}>{detail.label}:</Text>
+                  </View>
+                  <Text style={styles.detailValue}>{detail.value}</Text>
+                </View>
+              ))
+            ) : (
+              <View style={styles.collapsedDetails}>
+                <View style={styles.collapsedDetailItem}>
+                  <Image
+                    source={require('../../assets/icons/bed.png')}
+                    style={styles.collapsedDetailIcon}
+                    resizeMode="contain"
+                  />
+                  <Text style={styles.collapsedDetailText}>{listing.bedrooms} Bedrooms</Text>
+                </View>
+                
+                <View style={styles.collapsedDetailItem}>
+                  <Image
+                    source={require('../../assets/icons/bath.png')}
+                    style={styles.collapsedDetailIcon}
+                    resizeMode="contain"
+                  />
+                  <Text style={styles.collapsedDetailText}>{listing.bathrooms} Bathroom</Text>
+                </View>
+                
+                <View style={styles.collapsedDetailItem}>
+                  <Image
+                    source={require('../../assets/icons/foot.png')}
+                    style={styles.collapsedDetailIcon}
+                    resizeMode="contain"
+                  />
+                  <Text style={styles.collapsedDetailText}>{listing.lotSize || 'N/A'}</Text>
+                </View>
+              </View>
+            )}
           </View>
-          <Text style={styles.detailLabel}>{detail.label}:</Text>
-        </View>
-        <Text style={styles.detailValue}>
-          {detail.value}
-        </Text>
-      </View>
-    ))
-  ) : (
-    // Collapsed view - show simple list like in the image
-    <View style={styles.collapsedDetails}>
-    <View style={styles.collapsedDetailItem}>
-      <Image
-        source={require('../../assets/icons/bed.png')}
-        style={styles.collapsedDetailIcon}
-        resizeMode="contain"
-      />
-      <Text style={styles.collapsedDetailText}>{listing.bedrooms} Bedrooms</Text>
-    </View>
-    
-    <View style={styles.collapsedDetailItem}>
-      <Image
-        source={require('../../assets/icons/bath.png')}
-        style={styles.collapsedDetailIcon}
-        resizeMode="contain"
-      />
-      <Text style={styles.collapsedDetailText}>{listing.bathrooms} Bathroom</Text>
-    </View>
-    
-    <View style={styles.collapsedDetailItem}>
-      <Image
-        source={require('../../assets/icons/foot.png')}
-        style={styles.collapsedDetailIcon}
-        resizeMode="contain"
-      />
-      <Text style={styles.collapsedDetailText}>{listing.lotSize || 'N/A'}</Text>
-    </View>
-  </View>
-  )}
-</View>
 
           {/* Insights Section */}
           <View style={styles.insightsSection}>
@@ -495,7 +509,6 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
               </TouchableOpacity>
             </View>
 
-            {/* Chat items would go here */}
             <View style={styles.emptyChatState}>
               <Text style={styles.emptyChatText}>No chats yet</Text>
             </View>
@@ -570,7 +583,7 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
       {/* Processing Overlay */}
       {isProcessing && (
         <View style={styles.processingOverlay}>
-          <ActivityIndicator size="large" color="#f97316" />
+          <ActivityIndicator size="large" color="#FF4500" />
           <Text style={styles.processingText}>Processing...</Text>
         </View>
       )}
@@ -578,21 +591,23 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
   );
 };
 
-// Helper function to get icon sources
 const getIconSource = (iconName: string) => {
-    const icons: { [key: string]: any } = {
-      bed: require('../../assets/icons/bed.png'),
-      bath: require('../../assets/icons/bath.png'),
-      home: require('../../assets/icons/Type.png'),
-      lot: require('../../assets/icons/Lot.png'),
-      parking: require('../../assets/icons/Park.png'),
-      cooling: require('../../assets/icons/Cooling.png'),
-      heating: require('../../assets/icons/Heat.png'),
-      dollar: require('../../assets/icons/Price.png'),
-      calendar: require('../../assets/icons/Calender.png'),
-    };
-    return icons[iconName] || require('../../assets/icons/Type.png');
+  const icons: { [key: string]: any } = {
+    bed: require('../../assets/icons/bed.png'),
+    bath: require('../../assets/icons/bath.png'),
+    home: require('../../assets/icons/Type.png'),
+    lot: require('../../assets/icons/Lot.png'),
+    parking: require('../../assets/icons/Park.png'),
+    cooling: require('../../assets/icons/Cooling.png'),
+    heating: require('../../assets/icons/Heat.png'),
+    dollar: require('../../assets/icons/Price.png'),
+    calendar: require('../../assets/icons/Calender.png'),
+    checkmark: require('../../assets/icons/checkmark.png'),
+    listing: require('../../assets/icons/listing.png'),
+    price: require('../../assets/icons/Price.png')
   };
+  return icons[iconName] || require('../../assets/icons/Type.png');
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -611,58 +626,54 @@ const styles = StyleSheet.create({
     position: 'relative',
     width,
     height: 400,
-  },
-  videoContainer: {
-    width: '100%',
-    height: '100%',
-    position: 'relative',
+    backgroundColor: '#000',
   },
   videoPlayer: {
     width: '100%',
     height: '100%',
   },
-  videoPlaceholder: {
-    backgroundColor: '#f3f4f6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  videoPlaceholderText: {
-    color: '#6b7280',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  playButton: {
+  // Center Play/Pause Button (Inline)
+  centerPlayPauseButton: {
     position: 'absolute',
     top: '50%',
     left: '50%',
-    transform: [{ translateX: -25 }, { translateY: -25 }],
-    width: 50,
-    height: 50,
+    transform: [{ translateX: -35 }, { translateY: -35 }],
+    zIndex: 10,
+  },
+  playPauseCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.9)',
   },
-  playButtonIcon: {
+  playPauseIcon: {
     color: '#fff',
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
     marginLeft: 3,
   },
+  // Fullscreen Button
   fullScreenButton: {
     position: 'absolute',
     top: 16,
     right: 16,
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 20,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
   },
   fullScreenButtonIcon: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
   },
   backButton: {
@@ -675,8 +686,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderColor: "#fff",
+    borderColor: '#fff',
     borderWidth: 1,
+    zIndex: 10,
   },
   backIcon: {
     width: 22,
@@ -684,11 +696,6 @@ const styles = StyleSheet.create({
     tintColor: '#fff',
     opacity: 0.95,
     transform: [{ scale: 1.1 }],
-  },
-  createButtonBackground: {
-    position: 'absolute',
-    borderRadius: 999,
-    overflow: 'hidden',
   },
   createButtonBackgroundImage: {
     borderRadius: 999,
@@ -711,6 +718,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 8,
     borderRadius: 20,
+    zIndex: 10,
   },
   shareButtonText: {
     color: '#fff',
@@ -730,6 +738,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
+    zIndex: 10,
   },
   imageCounterText: {
     color: '#fff',
@@ -741,8 +750,8 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     marginBottom: 10,
-    flexDirection: "row",
-    justifyContent: "space-between"
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   address: {
     fontSize: 18,
@@ -762,7 +771,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   editButton: {
-    backgroundColor: '#f97316',
+    backgroundColor: '#FF4500',
     paddingVertical: 14,
     borderRadius: 24,
     alignItems: 'center',
@@ -778,10 +787,10 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#f97316',
+    borderColor: '#FF4500',
   },
   soldButtonText: {
-    color: '#f97316',
+    color: '#FF4500',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -811,7 +820,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    justifyContent: "space-between"
   },
   collapsedDetailIcon: {
     width: 20,
@@ -822,7 +830,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6b7280',
     fontWeight: '500',
-   
   },
   detailsSection: {
     marginBottom: 24,
@@ -839,18 +846,15 @@ const styles = StyleSheet.create({
     color: '#1f2937',
   },
   seeMoreText: {
-    color: '#f97316',
+    color: '#FF4500',
     fontSize: 14,
     fontWeight: '600',
   },
-  // FIXED: Improved detail item layout
   detailItem: {
     flexDirection: 'row',
-    alignItems: 'center', // Changed to flex-start for multi-line support
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 2,
-    // borderBottomWidth: 1,
-    // borderBottomColor: '#f3f4f6',
   },
   detailLeftSection: {
     flexDirection: 'row',
@@ -875,7 +879,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     fontWeight: '500',
-    minWidth: 80, // Fixed width for labels to align values
+    minWidth: 80,
   },
   detailValue: {
     fontSize: 12,
@@ -885,12 +889,6 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 8,
     flexWrap: 'wrap',
-  },
-  // FIXED: Added multi-line value style
-  multiLineValue: {
-    textAlign: 'left',
-    lineHeight: 16,
-    marginTop: 2,
   },
   insightsSection: {
     marginBottom: 24,
@@ -935,7 +933,7 @@ const styles = StyleSheet.create({
     color: '#1f2937',
   },
   seeAll: {
-    color: '#f97316',
+    color: '#FF4500',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -947,6 +945,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9ca3af',
   },
+  // Full Screen Video Styles
   fullScreenVideo: {
     flex: 1,
     backgroundColor: '#000',
@@ -961,19 +960,46 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 60,
     right: 20,
-    width: 40,
-    height: 40,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1001,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
   },
   closeButtonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
   },
+  // Full Screen Play/Pause Button
+  fullScreenPlayPauseButton: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -40 }, { translateY: -40 }],
+    zIndex: 1000,
+  },
+  fullScreenPlayPauseCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.9)',
+  },
+  fullScreenPlayPauseIcon: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginLeft: 3,
+  },
+  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1022,7 +1048,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#f97316',
+    backgroundColor: '#FF4500',
     alignItems: 'center',
   },
   modalConfirmText: {

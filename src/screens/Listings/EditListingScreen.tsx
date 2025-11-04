@@ -108,7 +108,7 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                 type: 'error',
                 text1: 'Limit Reached',
                 text2: `Maximum ${MAX_IMAGES} images and ${MAX_VIDEOS} video reached`,
-                position: 'top',
+                position: 'bottom',
             });
             return;
         }
@@ -123,7 +123,7 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                         type: 'error',
                         text1: 'Limit Reached',
                         text2: `Maximum ${MAX_IMAGES} images allowed`,
-                        position: 'top',
+                        position: 'bottom',
                     });
                     return;
                 }
@@ -133,7 +133,7 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                         type: 'error',
                         text1: 'Limit Reached',
                         text2: `Maximum ${MAX_VIDEOS} video allowed`,
-                        position: 'top',
+                        position: 'bottom',
                     });
                     return;
                 }
@@ -143,7 +143,7 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                     type: 'success',
                     text1: 'Success',
                     text2: 'Media uploaded successfully',
-                    position: 'top',
+                    position: 'bottom',
                 });
             }
         } catch (error) {
@@ -152,7 +152,7 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                 type: 'error',
                 text1: 'Error',
                 text2: 'Failed to upload media. Please try again.',
-                position: 'top',
+                position: 'bottom',
             });
         }
     };
@@ -170,7 +170,7 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                     type: 'success',
                     text1: 'Success',
                     text2: 'Document uploaded successfully',
-                    position: 'top',
+                    position: 'bottom',
                 });
             }
         } catch (error) {
@@ -179,7 +179,7 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                 type: 'error',
                 text1: 'Error',
                 text2: 'Failed to upload document. Please try again.',
-                position: 'top',
+                position: 'bottom',
             });
         }
     };
@@ -215,7 +215,7 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                 type: 'error',
                 text1: 'Validation Error',
                 text2: failedValidation.message,
-                position: 'top',
+                position: 'bottom',
             });
             return false;
         }
@@ -223,90 +223,49 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
         return true;
     };
 
-    const handleUpdateListing = async () => {
+    const handlePreviewListing = () => {
         if (!validateForm()) return;
 
-        setLoading(true);
+        // Prepare the data for preview screen
+        const previewData = {
+            formData: {
+                ...formData,
+                // Ensure all required fields are properly formatted
+                propertyAddress: formData.propertyAddress,
+                propertyType: formData.propertyType,
+                yearBuilt: formData.yearBuilt,
+                heatingSystems: formData.heatingSystems,
+                coolingSystems: formData.coolingSystems,
+                parking: formData.parking,
+                price: formData.price,
+                bedrooms: formData.bedrooms,
+                bathrooms: formData.bathrooms,
+                lotSize: formData.lotSize,
+                lotUnit: formData.lotUnit,
+                squareFoot: formData.squareFoot,
+                description: formData.description,
+                networth: formData.networth,
+                rehabEstimate: formData.rehabEstimate,
+                averageLeasePrice: formData.averageLeasePrice,
+            },
+            mediaItems,
+            documentItems,
+            imageCount,
+            videoCount,
+            // Add edit-specific data
+            isEdit: true,
+            listingId: listing.propertyListingId,
+            originalListing: listing
+        };
 
-        try {
-            // Prepare the request data
-            const requestData: CreatePropertyListingRequest = {
-                SiteOrPropertyImages: mediaItems.map(item => item.url),
-                PropertyAddress: formData.propertyAddress,
-                PropertyType: formData.propertyType,
-                YearBuilt: parseInt(formData.yearBuilt) || 0,
-                HeatingSystems: formData.heatingSystems,
-                CoolingSystems: formData.coolingSystems,
-                Price: parseFloat(formData.price) || 0,
-                Bedrooms: parseInt(formData.bedrooms) || 0,
-                Bathrooms: parseFloat(formData.bathrooms) || 0,
-                Parking: formData.parking,
-                LotSize: `${formData.lotSize} ${formData.lotUnit}`,
-                SquareFoot: parseFloat(formData.squareFoot) || 0,
-                Documents: documentItems,
-                Description: formData.description,
-                Networth: parseFloat(formData.networth) || 0,
-                ImageCount: imageCount,
-                VideoCount: videoCount,
-            };
+        console.log('📝 Navigating to preview with edited data');
 
-            // Add optional fields if provided
-            if (formData.rehabEstimate) {
-                requestData.RehabEstimate = parseFloat(formData.rehabEstimate);
-            }
-            if (formData.averageLeasePrice) {
-                requestData.AverageLeasePrice = parseFloat(formData.averageLeasePrice);
-            }
-
-            console.log('🔄 Updating listing with data:', requestData);
-
-            const result = await propertyListingsAPI.updatePropertyListing(listing.propertyListingId, requestData);
-
-            Toast.show({
-                type: 'success',
-                text1: 'Success',
-                text2: 'Listing updated successfully!',
-                position: 'top',
-                visibilityTime: 2000,
-                onHide: () => navigation.goBack(),
-            });
-
-        } catch (error: any) {
-            console.error('💥 Error updating listing:', error);
-            
-            if (error.response?.status === 500) {
-                Toast.show({
-                    type: 'error',
-                    text1: 'Server Error',
-                    text2: 'There was an issue updating the listing.',
-                    position: 'top',
-                });
-            } else if (error.response?.status === 400) {
-                Toast.show({
-                    type: 'error',
-                    text1: 'Validation Error',
-                    text2: 'Please check all required fields.',
-                    position: 'top',
-                });
-            } else if (error.message?.includes('Network Error')) {
-                Toast.show({
-                    type: 'error',
-                    text1: 'Network Error',
-                    text2: 'Please check your internet connection.',
-                    position: 'top',
-                });
-            } else {
-                Toast.show({
-                    type: 'error',
-                    text1: 'Error',
-                    text2: error.message || 'Failed to update listing.',
-                    position: 'top',
-                });
-            }
-        } finally {
-            setLoading(false);
-        }
+        // Navigate to Preview screen
+        navigation.navigate('PreviewListing', {
+            listingData: previewData
+        });
     };
+
 
     const updateFormData = (key: string, value: any) => {
         setFormData(prev => ({ ...prev, [key]: value }));
@@ -317,10 +276,18 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
             const key = type === 'parking' ? 'parking' : `${type}Systems`;
             const currentArray = prev[key] || [];
 
-            const isSelected = currentArray.includes(value);
+            // If "None" is selected, clear all other options
+            if (value === 'None') {
+                return { ...prev, [key]: ['None'] };
+            }
+
+            // If selecting any other option, remove "None" if it exists
+            const filteredArray = currentArray.filter(item => item !== 'None');
+            
+            const isSelected = filteredArray.includes(value);
             const newArray = isSelected
-                ? currentArray.filter(item => item !== value)
-                : [...currentArray, value];
+                ? filteredArray.filter(item => item !== value)
+                : [...filteredArray, value];
 
             return { ...prev, [key]: newArray };
         });
@@ -430,7 +397,7 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                 <Text style={styles.headerTitle}>Edit Listing</Text>
             </View>
 
-            <KeyboardAvoidingView   
+            <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={{ flex: 1 }}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
@@ -447,16 +414,44 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                             style={styles.uploadBox}
                             onPress={handleAddMedia}
                             disabled={uploading || !canAddMoreMedia}
+                             activeOpacity={0.8}
                         >
                             {uploading ? (
-                                <ActivityIndicator size="large" color="#f97316" />
+                                <ActivityIndicator size="large" color="#FF4500" />
                             ) : (
-                                <>
-                                    <View style={styles.uploadIcon}>
-                                        <Text style={styles.uploadIconText}>🖼️</Text>
-                                    </View>
-                                    <Text style={styles.uploadText}>Upload Images</Text>
-                                </>
+                               <>
+        {mediaItems.length > 0 ? (
+          <View style={styles.stackContainer}>
+            {mediaItems.slice(0, 5).map((item, index) => (
+              <View
+                key={`${item.url}-${index}`}
+                style={[styles.stackItem, { left: index * 25, zIndex: index }]}
+              >
+                {item.type === 'image' ? (
+                  <Image source={{ uri: item.url }} style={styles.stackImage} />
+                ) : (
+                  <View style={styles.stackVideo}>
+                    <Text style={styles.videoIcon}>🎥</Text>
+                  </View>
+                )}
+              </View>
+            ))}
+
+            {/* Overlay */}
+            <View style={styles.stackOverlay}>
+              <Text style={styles.overlayCount}>+{mediaItems.length} files attached</Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.uploadIcon}>
+            <Image
+              source={require('../../assets/icons/media.png')}
+              style={styles.uploadIconText}
+            />
+            <Text style={styles.uploadText}>Upload Media</Text>
+          </View>
+        )}
+      </>
                             )}
                         </TouchableOpacity>
 
@@ -501,7 +496,12 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
 
                     {/* Location Section */}
                     <View style={styles.section}>
-                        <Text style={styles.sectionLabel}>Location</Text>
+
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.sectionLabel}>Location</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
+
                         <View style={styles.formGroup}>
                             <View style={styles.inputContainer}>
                                 <TextInput
@@ -520,13 +520,23 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
 
                     {/* Type */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Type</Text>
+
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Type</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
+
                         {renderDropdownButton('propertyType', 'Type', PROPERTY_TYPES, false)}
                     </View>
 
                     {/* Year Built */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Year Built</Text>
+
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Year Built</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
+
                         <View style={styles.inputContainer}>
                             <TextInput
                                 style={styles.input}
@@ -537,32 +547,56 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                                 onChangeText={(value) => updateFormData('yearBuilt', value)}
                             />
                             <TouchableOpacity style={styles.inputIconButton}>
-                                <Text style={styles.inputIconText}>📅</Text>
+                                {/* <Text style={styles.inputIconText}>📅</Text> */}
+                                <Image
+                                    source={require('../../assets/icons/calendar.png')}
+                                    style={styles.inputIconText}
+                                />
                             </TouchableOpacity>
                         </View>
                     </View>
 
                     {/* Heating */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Heating</Text>
+
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Heating</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
+
                         {renderDropdownButton('heating', 'Add heating', HEATING_OPTIONS, true)}
                     </View>
 
                     {/* Cooling */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Cooling</Text>
+
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Cooling</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
+
                         {renderDropdownButton('cooling', 'Add Cooling', COOLING_OPTIONS, true)}
                     </View>
 
                     {/* Parking */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Parking</Text>
+
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Parking</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
+
                         {renderDropdownButton('parking', 'Add Parking', PARKING_OPTIONS, true)}
                     </View>
 
                     {/* Price */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Price</Text>
+
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Price</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
+
                         <View style={styles.inputContainer}>
                             <TextInput
                                 style={styles.input}
@@ -577,7 +611,12 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
 
                     {/* Bedrooms */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Bedrooms</Text>
+
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Bedrooms</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
+
                         <View style={styles.inputContainer}>
                             <TextInput
                                 style={styles.input}
@@ -592,7 +631,12 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
 
                     {/* Bathrooms */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Bathrooms</Text>
+
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Bathrooms</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
+
                         <View style={styles.inputContainer}>
                             <TextInput
                                 style={styles.input}
@@ -607,7 +651,13 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
 
                     {/* Lot */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Lot</Text>
+
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Lot</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
+
+                        {renderDropdownButton('lotUnit', 'Acres', LOT_UNITS, false)}
                         <View style={styles.lotContainer}>
                             <TextInput
                                 style={styles.lotInput}
@@ -617,13 +667,18 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                                 value={formData.lotSize}
                                 onChangeText={(value) => updateFormData('lotSize', value)}
                             />
-                            {/* {renderDropdownButton('lotUnit', 'Acres', LOT_UNITS, false)} */}
+
                         </View>
                     </View>
 
                     {/* SqFt */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>SqFt</Text>
+
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>SqFt</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
+
                         <View style={styles.inputContainer}>
                             <TextInput
                                 style={styles.input}
@@ -636,9 +691,68 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                         </View>
                     </View>
 
+                    <View style={styles.formGroup}>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Market Value Opinion</Text>
+                            {/* <Text style={styles.required}>*</Text> */}
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Add Market Value Opinion"
+                                placeholderTextColor="#9ca3af"
+                                keyboardType="numeric"
+                                // value={formData.networth}
+                                onChangeText={(value) => updateFormData('networth', value)}
+                            />
+                        </View>
+                    </View>
+
+                    <View style={styles.formGroup}>
+
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Rehab Estimate</Text>
+                            {/* <Text style={styles.required}>*</Text> */}
+                        </View>
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Add Rehab Estimate"
+                                placeholderTextColor="#9ca3af"
+                                keyboardType="numeric"
+                                // value={formData.rehabEstimate}
+                                onChangeText={(value) => updateFormData('rehabEstimate', value)}
+                            />
+                        </View>
+                    </View>
+
+                    <View style={styles.formGroup}>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Average Lease Price</Text>
+                            {/* <Text style={styles.required}>*</Text> */}
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Add Average Lease Price"
+                                placeholderTextColor="#9ca3af"
+                                keyboardType="numeric"
+                                // value={formData.averageLeasePrice}
+                                onChangeText={(value) => updateFormData('averageLeasePrice', value)}
+                            />
+                        </View>
+                    </View>
+
                     {/* Documents */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Documents</Text>
+
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Documents</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
+
                         <TouchableOpacity
                             style={styles.documentUploadBox}
                             onPress={handleDocumentUpload}
@@ -667,7 +781,7 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                                                 {doc.split('/').pop() || 'Document'}
                                             </Text>
                                         </View>
-                                        <TouchableOpacity 
+                                        <TouchableOpacity
                                             style={styles.removeDocButton}
                                             onPress={() => removeDocument(index)}
                                         >
@@ -681,7 +795,12 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
 
                     {/* Description */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Description</Text>
+
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Description</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
+
                         <View style={styles.textAreaContainer}>
                             <TextInput
                                 style={styles.textArea}
@@ -699,13 +818,13 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                     {/* Update Listing Button */}
                     <TouchableOpacity
                         style={[styles.updateButton, loading && styles.updateButtonDisabled]}
-                        onPress={handleUpdateListing}
+                        onPress={handlePreviewListing}
                         disabled={loading}
                     >
                         {loading ? (
                             <ActivityIndicator size="small" color="#fff" />
                         ) : (
-                            <Text style={styles.updateButtonText}>UPDATE LISTING</Text>
+                            <Text style={styles.updateButtonText}>PREVIEW LISTING</Text>
                         )}
                     </TouchableOpacity>
                 </ScrollView>
@@ -764,14 +883,14 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
     );
 };
 
-// Use the exact same styles as CreateListingScreen
+
 const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#fff',
     },
     header: {
-        backgroundColor: '#f97316',
+        backgroundColor: '#FF4500',
         paddingTop: Platform.OS === 'ios' ? 50 : 30,
         paddingBottom: 16,
         paddingHorizontal: 16,
@@ -815,15 +934,83 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     uploadBox: {
-        backgroundColor: '#e3e7eb',
-        borderRadius: 18,
-        paddingVertical: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 12,
-        width: '77%',
-        alignSelf: 'center',
-    },
+  backgroundColor: '#e3e7eb',
+  borderRadius: 18,
+  paddingVertical: 20,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginBottom: 12,
+  width: '77%',
+  alignSelf: 'center',
+  height: 180,
+  overflow: 'hidden',
+  position: 'relative',
+},
+
+stackContainer: {
+  width: '100%',
+  height: '100%',
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'flex-start',
+  position: 'relative',
+  paddingLeft: 16,
+},
+
+stackItem: {
+  position: 'absolute',
+  top: 0,
+  width: 120,
+  height: '100%',
+  borderRadius: 16,
+  overflow: 'hidden',
+  shadowColor: '#000',
+  shadowOpacity: 0.2,
+  shadowRadius: 5,
+  shadowOffset: { width: 0, height: 2 },
+  elevation: 3,
+},
+
+stackImage: {
+  width: '100%',
+  height: '100%',
+  resizeMode: 'cover',
+},
+
+stackVideo: {
+  width: '100%',
+  height: '100%',
+  backgroundColor: '#000',
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+
+videoIcon: {
+  fontSize: 28,
+  color: '#fff',
+},
+
+stackOverlay: {
+  position: 'absolute',
+  top: 0,
+  right: 0,
+  width: '90%',
+  height: '100%',
+  backgroundColor: 'rgba(0,0,0,0.5)', // 80% overlay
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: 18,
+},
+
+overlayCount: {
+  color: '#fff',
+  fontSize: 14,
+  fontWeight: 'bold',
+  textAlign: "right",
+  alignItems: "flex-end",
+  alignSelf: "flex-end",
+  right: 10
+},
     uploadIcon: {
         width: 60,
         height: 60,
@@ -834,7 +1021,8 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     uploadIconText: {
-        fontSize: 32,
+        width: 30,
+        height: 30,
     },
     uploadText: {
         fontSize: 18,
@@ -915,7 +1103,19 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: '#000',
+    },
+    labelContainer: {
+        position: 'relative',
+        alignSelf: 'flex-start',
         marginBottom: 8,
+    },
+    required: {
+        position: 'absolute',
+        top: -4,     // move slightly above the text
+        right: -10,  // move slightly to the right
+        color: 'red',
+        fontSize: 14,
+        fontWeight: 'bold',
     },
     inputContainer: {
         flexDirection: 'row',
@@ -936,8 +1136,10 @@ const styles = StyleSheet.create({
         padding: 4,
     },
     inputIconText: {
-        fontSize: 14,
-        color: '#9ca3af',
+        // fontSize: 14,
+        // color: '#9ca3af',
+        width: 20,
+        height: 20
     },
     dropdownButton: {
         flexDirection: 'row',
@@ -965,6 +1167,7 @@ const styles = StyleSheet.create({
     lotContainer: {
         flexDirection: 'row',
         gap: 12,
+        marginTop: 20
     },
     lotInput: {
         flex: 1,
@@ -1062,7 +1265,7 @@ const styles = StyleSheet.create({
         textAlignVertical: 'top',
     },
     updateButton: {
-        backgroundColor: '#f97316',
+        backgroundColor: '#FF4500',
         borderRadius: 25,
         paddingVertical: 14,
         alignItems: 'center',
@@ -1126,11 +1329,11 @@ const styles = StyleSheet.create({
         color: '#374151',
     },
     modalOptionTextSelected: {
-        color: '#f97316',
+        color: '#FF4500',
         fontWeight: '500',
     },
     modalDoneButton: {
-        backgroundColor: '#f97316',
+        backgroundColor: '#FF4500',
         paddingVertical: 12,
         alignItems: 'center',
     },

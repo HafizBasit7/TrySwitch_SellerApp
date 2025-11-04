@@ -30,12 +30,14 @@ export const propertyListingsAPI = {
   // GET - Get user's property listings
   getLoggedUserPropertyListings: async (
     pageNumber: number = 1, 
-    pageSize: number = 10
+    pageSize: number = 100
   ): Promise<PropertyListingsResponse> => {
     const response = await apiClient.get<PropertyListingsResponse>(
       `/PropertyListings/GetLoggedUserPropertyListings?pageNumber=${pageNumber}&pageSize=${pageSize}`
     );
+      // console.log("Total Properties in DB: ", response.data.totalCount);
     return response.data;
+   
   },
 
   // POST - Create new property listing
@@ -44,16 +46,16 @@ export const propertyListingsAPI = {
   ): Promise<CreatePropertyListingResponse> => {
     const formData = new FormData();
 
-    console.log('🛠️ Sending request with address:', data.PropertyAddress);
-    console.log('📸 Media items count:', data.SiteOrPropertyImages.length);
-    console.log('📄 Document items count:', data.Documents.length);
+    // console.log('🛠️ Sending request with address:', data.PropertyAddress);
+    // console.log('📸 Media items count:', data.SiteOrPropertyImages.length);
+    // console.log('📄 Document items count:', data.Documents.length);
 
     // Append image URLs as strings
     if (data.SiteOrPropertyImages && data.SiteOrPropertyImages.length > 0) {
       data.SiteOrPropertyImages.forEach((imageUrl, index) => {
         if (typeof imageUrl === 'string' && imageUrl.trim().startsWith('http')) {
           formData.append('SiteOrPropertyImages', imageUrl.trim());
-          console.log(`📷 Appending image URL ${index + 1}:`, imageUrl.substring(0, 50) + '...');
+          // console.log(`📷 Appending image URL ${index + 1}:`, imageUrl.substring(0, 50) + '...');
         } else {
           console.warn(`⚠️ Skipping invalid image at index ${index}:`, imageUrl);
         }
@@ -65,7 +67,7 @@ export const propertyListingsAPI = {
       data.Documents.forEach((docUrl, index) => {
         if (typeof docUrl === 'string' && docUrl.trim().startsWith('http')) {
           formData.append('Documents', docUrl.trim());
-          console.log(`📄 Appending document URL ${index + 1}:`, docUrl.substring(0, 50) + '...');
+          // console.log(`📄 Appending document URL ${index + 1}:`, docUrl.substring(0, 50) + '...');
         } else {
           console.warn(`⚠️ Skipping invalid document at index ${index}:`, docUrl);
         }
@@ -116,7 +118,7 @@ export const propertyListingsAPI = {
     formData.append('VideoCount', data.VideoCount.toString());
 
     try {
-      console.log('🚀 Sending POST request to /PropertyListings/CreatePropertyListing');
+      // console.log('🚀 Sending POST request to /PropertyListings/CreatePropertyListing');
       
       const response = await apiClient.post<CreatePropertyListingResponse>(
         '/PropertyListings/CreatePropertyListing',
@@ -187,16 +189,16 @@ export const propertyListingsAPI = {
   ): Promise<CreatePropertyListingResponse> => {
     const formData = new FormData();
 
-    console.log('🛠️ Updating property listing ID:', id);
-    console.log('📸 Media items count:', data.SiteOrPropertyImages.length);
-    console.log('📄 Document items count:', data.Documents.length);
+    // console.log('🛠️ Updating property listing ID:', id);
+    // console.log('📸 Media items count:', data.SiteOrPropertyImages.length);
+    // console.log('📄 Document items count:', data.Documents.length);
 
     // Append image URLs as strings
     if (data.SiteOrPropertyImages && data.SiteOrPropertyImages.length > 0) {
       data.SiteOrPropertyImages.forEach((imageUrl, index) => {
         if (typeof imageUrl === 'string' && imageUrl.trim().startsWith('http')) {
           formData.append('SiteOrPropertyImages', imageUrl.trim());
-          console.log(`📷 Appending image URL ${index + 1}:`, imageUrl.substring(0, 50) + '...');
+          // console.log(`📷 Appending image URL ${index + 1}:`, imageUrl.substring(0, 50) + '...');
         } else {
           console.warn(`⚠️ Skipping invalid image at index ${index}:`, imageUrl);
         }
@@ -208,7 +210,7 @@ export const propertyListingsAPI = {
       data.Documents.forEach((docUrl, index) => {
         if (typeof docUrl === 'string' && docUrl.trim().startsWith('http')) {
           formData.append('Documents', docUrl.trim());
-          console.log(`📄 Appending document URL ${index + 1}:`, docUrl.substring(0, 50) + '...');
+          // console.log(`📄 Appending document URL ${index + 1}:`, docUrl.substring(0, 50) + '...');
         } else {
           console.warn(`⚠️ Skipping invalid document at index ${index}:`, docUrl);
         }
@@ -259,7 +261,7 @@ export const propertyListingsAPI = {
     formData.append('VideoCount', data.VideoCount.toString());
 
     try {
-      console.log('🚀 Sending POST request to /PropertyListings/UpdatePropertyListing');
+      // console.log('🚀 Sending POST request to /PropertyListings/UpdatePropertyListing');
       
       const response = await apiClient.post<CreatePropertyListingResponse>(
         `/PropertyListings/UpdatePropertyListing?id=${id}`,

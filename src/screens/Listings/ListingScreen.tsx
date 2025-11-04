@@ -153,7 +153,7 @@ const ListingsScreen: React.FC<ListingsScreenProps> = ({ navigation }) => {
       case 'active':
         return '#22c55e'; 
       case 'expired':
-        return '#f97316';
+        return '#FF4500';
       case 'sold':
         return '#ef4444';
       default:
@@ -214,9 +214,17 @@ const ListingsScreen: React.FC<ListingsScreenProps> = ({ navigation }) => {
           <View style={styles.mediaBadgesContainer}>
             {validImageCount > 0 && videoCount > 0 &&(
               <View style={styles.mediaBadge}>
-                <Text style={styles.mediaBadgeIcon}>📷</Text>
+             
+                <Image 
+                source={require('../../assets/icons/cam.png')}
+                style={styles.mediaBadgeIcon}
+                />
                 <Text style={styles.mediaBadgeText}>{validImageCount}</Text>
-                <Text style={styles.mediaBadgeIcon}>🎥</Text>
+              
+                  <Image 
+                source={require('../../assets/icons/vid.png')}
+                style={styles.mediaBadgeIcon}
+                />
                 <Text style={styles.mediaBadgeText}>{videoCount}</Text>
               </View>
             )}
@@ -265,7 +273,7 @@ const ListingsScreen: React.FC<ListingsScreenProps> = ({ navigation }) => {
             </View>
             
             {/* Share button */}
-            <TouchableOpacity 
+            {/* <TouchableOpacity 
               style={styles.shareButton}
               onPress={(e) => {
                 e.stopPropagation();
@@ -277,7 +285,7 @@ const ListingsScreen: React.FC<ListingsScreenProps> = ({ navigation }) => {
                 style={styles.shareIconButton}
                 resizeMode="contain"
               />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
 
           {/* Stats and Price Row */}
@@ -369,8 +377,8 @@ const ListingsScreen: React.FC<ListingsScreenProps> = ({ navigation }) => {
           <RefreshControl 
             refreshing={refreshing} 
             onRefresh={handleRefresh}
-            colors={['#f97316']}
-            tintColor="#f97316"
+            colors={['#FF4500']}
+            tintColor="#FF4500"
           />
         }
         onEndReached={handleLoadMore}
@@ -378,7 +386,7 @@ const ListingsScreen: React.FC<ListingsScreenProps> = ({ navigation }) => {
         ListFooterComponent={
           loading ? (
             <View style={styles.loadingFooter}>
-              <ActivityIndicator size="large" color="#f97316" />
+              <ActivityIndicator size="large" color="#FF4500" />
             </View>
           ) : null
         }
@@ -413,7 +421,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafb',
   },
   header: {
-    backgroundColor: '#f97316',
+    backgroundColor: '#FF4500',
     paddingTop: 12,
     paddingBottom: 16,
     paddingHorizontal: 16,
@@ -548,13 +556,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 8,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   mediaBadgeIcon: {
-    fontSize: 10,
+    width: 10,
+    height: 10,
+    tintColor: "#fff"
   },
   mediaBadgeText: {
     color: '#fff',
@@ -626,7 +636,7 @@ const styles = StyleSheet.create({
   shareIconButton: {
     width: 14,
     height: 14,
-    tintColor: '#f97316',
+    tintColor: '#FF4500',
   },
   footerRow: {
     flexDirection: 'row',

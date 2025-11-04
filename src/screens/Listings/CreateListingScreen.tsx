@@ -78,13 +78,36 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
     const canAddMoreVideos = videoCount < MAX_VIDEOS;
     const canAddMoreMedia = canAddMoreImages || canAddMoreVideos;
 
+    // UPDATED: Enhanced handleMultiSelect to handle "None" option
+    const handleMultiSelect = (type: 'heating' | 'cooling' | 'parking', value: string) => {
+        setFormData(prev => {
+            const key = type === 'parking' ? 'parking' : `${type}Systems`;
+            const currentArray = prev[key] || [];
+
+            // If "None" is selected, clear all other options
+            if (value === 'None') {
+                return { ...prev, [key]: ['None'] };
+            }
+
+            // If selecting any other option, remove "None" if it exists
+            const filteredArray = currentArray.filter(item => item !== 'None');
+            
+            const isSelected = filteredArray.includes(value);
+            const newArray = isSelected
+                ? filteredArray.filter(item => item !== value)
+                : [...filteredArray, value];
+
+            return { ...prev, [key]: newArray };
+        });
+    };
+
     const handleAddMedia = async () => {
         if (!canAddMoreMedia) {
             Toast.show({
                 type: 'error',
                 text1: 'Limit Reached',
                 text2: `Maximum ${MAX_IMAGES} images and ${MAX_VIDEOS} video reached`,
-                position: 'top',
+                position: 'bottom',
             });
             return;
         }
@@ -99,7 +122,7 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
                         type: 'error',
                         text1: 'Limit Reached',
                         text2: `Maximum ${MAX_IMAGES} images allowed`,
-                        position: 'top',
+                        position: 'bottom',
                     });
                     return;
                 }
@@ -109,7 +132,7 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
                         type: 'error',
                         text1: 'Limit Reached',
                         text2: `Maximum ${MAX_VIDEOS} video allowed`,
-                        position: 'top',
+                        position: 'bottom',
                     });
                     return;
                 }
@@ -119,7 +142,7 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
                     type: 'success',
                     text1: 'Success',
                     text2: 'Media uploaded successfully',
-                    position: 'top',
+                    position: 'bottom',
                 });
             }
         } catch (error) {
@@ -128,7 +151,7 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
                 type: 'error',
                 text1: 'Error',
                 text2: 'Failed to upload media. Please try again.',
-                position: 'top',
+                position: 'bottom',
             });
         }
     };
@@ -146,7 +169,7 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
                     type: 'success',
                     text1: 'Success',
                     text2: 'Document uploaded successfully',
-                    position: 'top',
+                    position: 'bottom',
                 });
             }
         } catch (error) {
@@ -155,7 +178,7 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
                 type: 'error',
                 text1: 'Error',
                 text2: 'Failed to upload document. Please try again.',
-                position: 'top',
+                position: 'bottom',
             });
         }
     };
@@ -191,7 +214,7 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
                 type: 'error',
                 text1: 'Validation Error',
                 text2: failedValidation.message,
-                position: 'top',
+                position: 'bottom',
             });
             return false;
         }
@@ -199,7 +222,6 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
         return true;
     };
 
-    // NEW: Handle preview navigation instead of direct submission
     const handlePreviewListing = () => {
         if (!validateForm()) return;
 
@@ -220,20 +242,6 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
 
     const updateFormData = (key: string, value: any) => {
         setFormData(prev => ({ ...prev, [key]: value }));
-    };
-
-    const handleMultiSelect = (type: 'heating' | 'cooling' | 'parking', value: string) => {
-        setFormData(prev => {
-            const key = type === 'parking' ? 'parking' : `${type}Systems`;
-            const currentArray = prev[key] || [];
-
-            const isSelected = currentArray.includes(value);
-            const newArray = isSelected
-                ? currentArray.filter(item => item !== value)
-                : [...currentArray, value];
-
-            return { ...prev, [key]: newArray };
-        });
     };
 
     const openDropdownModal = (type: string, options: string[], isMulti: boolean = false) => {
@@ -325,6 +333,45 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
         );
     };
 
+    // UPDATED: Media preview stack renderer like EditListingScreen
+    const renderMediaPreviewStack = () => {
+        if (mediaItems.length === 0) {
+            return (
+                <View style={styles.uploadIcon}>
+                    <Image
+                        source={require('../../assets/icons/media.png')}
+                        style={styles.uploadIconText}
+                    />
+                    <Text style={styles.uploadText}>Upload Media</Text>
+                </View>
+            );
+        }
+
+        return (
+            <View style={styles.stackContainer}>
+                {mediaItems.slice(0, 5).map((item, index) => (
+                    <View
+                        key={`${item.url}-${index}`}
+                        style={[styles.stackItem, { left: index * 25, zIndex: index }]}
+                    >
+                        {item.type === 'image' ? (
+                            <Image source={{ uri: item.url }} style={styles.stackImage} />
+                        ) : (
+                            <View style={styles.stackVideo}>
+                                <Text style={styles.videoIcon}>🎥</Text>
+                            </View>
+                        )}
+                    </View>
+                ))}
+
+                {/* Overlay */}
+                <View style={styles.stackOverlay}>
+                    <Text style={styles.overlayCount}>+{mediaItems.length} files attached</Text>
+                </View>
+            </View>
+        );
+    };
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor="#fff" />
@@ -351,22 +398,18 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
                     keyboardShouldPersistTaps="handled"
                 >
 
-                    {/* Upload Images Section */}
+                    {/* UPDATED: Upload Images Section - Matching EditListingScreen */}
                     <View style={styles.uploadSection}>
                         <TouchableOpacity
                             style={styles.uploadBox}
                             onPress={handleAddMedia}
                             disabled={uploading || !canAddMoreMedia}
+                            activeOpacity={0.8}
                         >
                             {uploading ? (
-                                <ActivityIndicator size="large" color="#f97316" />
+                                <ActivityIndicator size="large" color="#FF4500" />
                             ) : (
-                                <>
-                                    <View style={styles.uploadIcon}>
-                                        <Text style={styles.uploadIconText}>🖼️</Text>
-                                    </View>
-                                    <Text style={styles.uploadText}>Upload Images</Text>
-                                </>
+                                renderMediaPreviewStack()
                             )}
                         </TouchableOpacity>
 
@@ -411,7 +454,10 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
 
                     {/* Location Section */}
                     <View style={styles.section}>
-                        <Text style={styles.sectionLabel}>Location</Text>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.sectionLabel}>Location</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
                         <View style={styles.formGroup}>
                             <View style={styles.inputContainer}>
                                 <TextInput
@@ -430,13 +476,19 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
 
                     {/* Type */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Type</Text>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Type</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
                         {renderDropdownButton('propertyType', 'Type', PROPERTY_TYPES, false)}
                     </View>
 
                     {/* Year Built */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Year Built</Text>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Year Built</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
                         <View style={styles.inputContainer}>
                             <TextInput
                                 style={styles.input}
@@ -447,32 +499,47 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
                                 onChangeText={(value) => updateFormData('yearBuilt', value)}
                             />
                             <TouchableOpacity style={styles.inputIconButton}>
-                                <Text style={styles.inputIconText}>📅</Text>
+                                <Image
+                                    source={require('../../assets/icons/calendar.png')}
+                                    style={styles.inputIconText}
+                                />
                             </TouchableOpacity>
                         </View>
                     </View>
 
                     {/* Heating */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Heating</Text>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Heating</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
                         {renderDropdownButton('heating', 'Add heating', HEATING_OPTIONS, true)}
                     </View>
 
                     {/* Cooling */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Cooling</Text>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Cooling</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
                         {renderDropdownButton('cooling', 'Add Cooling', COOLING_OPTIONS, true)}
                     </View>
 
                     {/* Parking */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Parking</Text>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Parking</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
                         {renderDropdownButton('parking', 'Add Parking', PARKING_OPTIONS, true)}
                     </View>
 
                     {/* Price */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Price</Text>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Price</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
                         <View style={styles.inputContainer}>
                             <TextInput
                                 style={styles.input}
@@ -487,7 +554,10 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
 
                     {/* Bedrooms */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Bedrooms</Text>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Bedrooms</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
                         <View style={styles.inputContainer}>
                             <TextInput
                                 style={styles.input}
@@ -502,7 +572,10 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
 
                     {/* Bathrooms */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Bathrooms</Text>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Bathrooms</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
                         <View style={styles.inputContainer}>
                             <TextInput
                                 style={styles.input}
@@ -517,7 +590,11 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
 
                     {/* Lot */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Lot</Text>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Lot</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
+                        {renderDropdownButton('lotUnit', 'Acres', LOT_UNITS, false)}
                         <View style={styles.lotContainer}>
                             <TextInput
                                 style={styles.lotInput}
@@ -532,7 +609,10 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
 
                     {/* SqFt */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>SqFt</Text>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>SqFt</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
                         <View style={styles.inputContainer}>
                             <TextInput
                                 style={styles.input}
@@ -545,9 +625,66 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
                         </View>
                     </View>
 
+                    {/* ADDED: Market Value Opinion */}
+                    <View style={styles.formGroup}>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Market Value Opinion</Text>
+                            {/* No * indicator as requested */}
+                        </View>
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Add Market Value Opinion"
+                                placeholderTextColor="#9ca3af"
+                                keyboardType="numeric"
+                                value={formData.networth}
+                                onChangeText={(value) => updateFormData('networth', value)}
+                            />
+                        </View>
+                    </View>
+
+                    {/* ADDED: Rehab Estimate */}
+                    <View style={styles.formGroup}>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Rehab Estimate</Text>
+                            {/* No * indicator as requested */}
+                        </View>
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Add Rehab Estimate"
+                                placeholderTextColor="#9ca3af"
+                                keyboardType="numeric"
+                                value={formData.rehabEstimate}
+                                onChangeText={(value) => updateFormData('rehabEstimate', value)}
+                            />
+                        </View>
+                    </View>
+
+                    {/* ADDED: Average Lease Price */}
+                    <View style={styles.formGroup}>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Average Lease Price</Text>
+                            {/* No * indicator as requested */}
+                        </View>
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Add Average Lease Price"
+                                placeholderTextColor="#9ca3af"
+                                keyboardType="numeric"
+                                value={formData.averageLeasePrice}
+                                onChangeText={(value) => updateFormData('averageLeasePrice', value)}
+                            />
+                        </View>
+                    </View>
+
                     {/* Documents */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Documents</Text>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Documents</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
                         <TouchableOpacity
                             style={styles.documentUploadBox}
                             onPress={handleDocumentUpload}
@@ -590,7 +727,10 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
 
                     {/* Description */}
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Description</Text>
+                        <View style={styles.labelContainer}>
+                            <Text style={styles.label}>Description</Text>
+                            <Text style={styles.required}>*</Text>
+                        </View>
                         <View style={styles.textAreaContainer}>
                             <TextInput
                                 style={styles.textArea}
@@ -605,7 +745,7 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
                         </View>
                     </View>
 
-                    {/* Preview Listing Button - NOW NAVIGATES TO PREVIEW SCREEN */}
+                    {/* Preview Listing Button */}
                     <TouchableOpacity
                         style={[styles.previewButton, loading && styles.previewButtonDisabled]}
                         onPress={handlePreviewListing}
@@ -668,19 +808,38 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
                 </View>
             </Modal>
 
-            <Toast />
+            {/* UPDATED: Toast with proper bottom center positioning */}
+            <Toast 
+                config={{
+                    success: (props) => (
+                        <View style={styles.toastContainer}>
+                            <View style={[styles.toast, styles.successToast]}>
+                                <Text style={styles.toastText1}>{props.text1}</Text>
+                                <Text style={styles.toastText2}>{props.text2}</Text>
+                            </View>
+                        </View>
+                    ),
+                    error: (props) => (
+                        <View style={styles.toastContainer}>
+                            <View style={[styles.toast, styles.errorToast]}>
+                                <Text style={styles.toastText1}>{props.text1}</Text>
+                                <Text style={styles.toastText2}>{props.text2}</Text>
+                            </View>
+                        </View>
+                    )
+                }}
+            />
         </View>
     );
 };
 
-// Your existing styles remain the same...
 const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#fff',
     },
     header: {
-        backgroundColor: '#f97316',
+        backgroundColor: '#FF4500',
         paddingTop: Platform.OS === 'ios' ? 50 : 12,
         paddingBottom: 16,
         paddingHorizontal: 16,
@@ -720,6 +879,7 @@ const styles = StyleSheet.create({
     uploadSection: {
         marginBottom: 20,
     },
+    // UPDATED: Upload box styles to match EditListingScreen
     uploadBox: {
         backgroundColor: '#e3e7eb',
         borderRadius: 18,
@@ -729,18 +889,76 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         width: '77%',
         alignSelf: 'center',
+        height: 180,
+        overflow: 'hidden',
+        position: 'relative',
     },
-    uploadIcon: {
-        width: 60,
-        height: 60,
-        backgroundColor: '#e5e7eb',
-        borderRadius: 30,
+    stackContainer: {
+        width: '100%',
+        height: '100%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        position: 'relative',
+        paddingLeft: 16,
+    },
+    stackItem: {
+        position: 'absolute',
+        top: 0,
+        width: 120,
+        height: '100%',
+        borderRadius: 16,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 3,
+    },
+    stackImage: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+    },
+    stackVideo: {
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#000',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 12,
+    },
+    videoIcon: {
+        fontSize: 28,
+        color: '#fff',
+    },
+    stackOverlay: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        width: '90%',
+        height: '100%',
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 18,
+    },
+    overlayCount: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: 'bold',
+        textAlign: "right",
+        alignItems: "flex-end",
+        alignSelf: "flex-end",
+        right: 10
+    },
+    uploadIcon: {
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     uploadIconText: {
-        fontSize: 32,
+        width: 60,
+        height: 60,
+        marginBottom: 12,
     },
     uploadText: {
         fontSize: 18,
@@ -786,9 +1004,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    videoIcon: {
-        fontSize: 24,
-    },
     removeMediaButton: {
         position: 'absolute',
         top: -6,
@@ -821,7 +1036,20 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: '#000',
+    },
+    // ADDED: Label container for * indicators
+    labelContainer: {
+        position: 'relative',
+        alignSelf: 'flex-start',
         marginBottom: 8,
+    },
+    required: {
+        position: 'absolute',
+        top: -4,
+        right: -10,
+        color: 'red',
+        fontSize: 14,
+        fontWeight: 'bold',
     },
     inputContainer: {
         flexDirection: 'row',
@@ -842,8 +1070,8 @@ const styles = StyleSheet.create({
         padding: 4,
     },
     inputIconText: {
-        fontSize: 14,
-        color: '#9ca3af',
+        width: 20,
+        height: 20,
     },
     dropdownButton: {
         flexDirection: 'row',
@@ -871,6 +1099,7 @@ const styles = StyleSheet.create({
     lotContainer: {
         flexDirection: 'row',
         gap: 12,
+        marginTop: 20
     },
     lotInput: {
         flex: 1,
@@ -968,7 +1197,7 @@ const styles = StyleSheet.create({
         textAlignVertical: 'top',
     },
     previewButton: {
-        backgroundColor: '#f97316',
+        backgroundColor: '#FF4500',
         borderRadius: 25,
         paddingVertical: 14,
         alignItems: 'center',
@@ -1032,11 +1261,11 @@ const styles = StyleSheet.create({
         color: '#374151',
     },
     modalOptionTextSelected: {
-        color: '#f97316',
+        color: '#FF4500',
         fontWeight: '500',
     },
     modalDoneButton: {
-        backgroundColor: '#f97316',
+        backgroundColor: '#FF4500',
         paddingVertical: 12,
         alignItems: 'center',
     },
@@ -1044,6 +1273,49 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 16,
         fontWeight: '600',
+    },
+    // ADDED: Toast styles for bottom center positioning
+    toastContainer: {
+        position: 'absolute',
+        bottom: 60,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+    },
+    toast: {
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 8,
+        marginHorizontal: 20,
+        minWidth: 200,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
+    },
+    successToast: {
+        backgroundColor: '#10B981',
+    },
+    errorToast: {
+        backgroundColor: '#EF4444',
+    },
+    toastText1: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    toastText2: {
+        color: 'white',
+        fontSize: 14,
+        marginTop: 4,
+        textAlign: 'center',
     },
 });
 

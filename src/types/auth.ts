@@ -33,6 +33,29 @@ export interface ResetPasswordRequest {
   password: string;
 }
 
+// 2FA API Types
+export interface Enable2FARequest {
+  isTwoFactorEnabled: boolean;
+}
+
+export interface Verify2FARequest {
+  email: string;
+  otp: number;
+  userProfileType: number;
+}
+
+export interface Enable2FAResponse {
+  success: boolean;
+  message?: string;
+}
+
+export interface Verify2FAResponse {
+  token: string;
+  refreshToken: string;
+  success: boolean;
+  message?: string;
+}
+
 // API Response Types
 export interface SignUpResponse {
   message: string;
@@ -51,8 +74,15 @@ export interface CreatePasswordResponse {
 }
 
 export interface SignInResponse {
-  token: string;
-  user?: any;
+  token?: string;
+  refreshToken?: string;
+  user?: {
+    id: string;
+    email: string;
+    name: string;
+  };
+  // 2FA response fields
+  requiresOtp?: boolean;
   message?: string;
 }
 
@@ -110,9 +140,6 @@ export interface SellerProfile {
   modifiedDate: string;
 }
 
-// Update CreateSellerProfileRequest to match API expected fields
-
-
 export interface CreateSellerProfileResponse {
   message: string;
   success: boolean;
@@ -125,6 +152,7 @@ export interface SellerProfileResponse {
   success?: boolean;
   message?: string;
 }
+
 export interface ApiResponse<T> {
   data?: T;
   sellerProfile?: T;
@@ -149,13 +177,13 @@ export interface UserInfo {
 export interface AuthContextType {
   userInfo: UserInfo | null;
   isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (token: string) => Promise<void>;
   signOut: () => void;
   signUp: (email: string, userProfileType: number) => Promise<void>;
   resetPassword: (email: string, password: string) => Promise<void>;
 }
 
-// Navigation Types
+// Navigation Types - Updated for 2FA
 export type AuthStackParamList = {
   Splash: undefined;
   SignIn: undefined;
@@ -163,7 +191,12 @@ export type AuthStackParamList = {
   ForgotPassword: undefined;
   OtpResetPassword: { email: string };
   ResetPassword: { email: string; otp: number };
-  Otp: { email: string; userProfileType: number };
+  Otp: { 
+    email: string; 
+    userProfileType: number;
+    is2FA?: boolean; // New: Flag to indicate 2FA flow
+    signInData?: SignInRequest; // New: Pass signin data for 2FA resend
+  };
   CreatePassword: { email: string };
   Home: undefined;
 };
@@ -321,11 +354,24 @@ export interface SendSMSResponse {
 
 export interface VerifySMSRequest {
   phoneNumber: string;
-  code: string;
+  otp: string;
 }
 
 export interface VerifySMSResponse {
   message: string;
   success: boolean;
   verified: boolean;
+}
+
+// OTP Screen Props Type
+export interface OtpScreenProps {
+  route: {
+    params: {
+      email: string;
+      userProfileType: number;
+      is2FA?: boolean;
+      signInData?: SignInRequest;
+    };
+  };
+  navigation: any;
 }

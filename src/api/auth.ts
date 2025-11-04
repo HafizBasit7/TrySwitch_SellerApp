@@ -17,6 +17,27 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { API_BASE_URL } from '../utils/constants';
 
+// Add 2FA types
+export interface Enable2FARequest {
+  isTwoFactorEnabled: boolean;
+}
+
+export interface Verify2FARequest {
+  email: string;
+  otp: number;
+  userProfileType: number;
+}
+
+export interface Enable2FAResponse {
+  success: boolean;
+  message?: string;
+}
+
+export interface Verify2FAResponse {
+  success: boolean;
+  message?: string;
+}
+
 export const authAPI = {
   signup: async (data: SignUpRequest): Promise<SignUpResponse> => {
     const response = await apiClient.post<SignUpResponse>('/Account/signup', data);
@@ -32,13 +53,14 @@ export const authAPI = {
 
   createPassword: async (data: CreatePasswordRequest): Promise<string> => {
     const response = await apiClient.post('/Account/create-password', data, {
-      transformResponse: [(data) => data] // Keep as string, don't parse JSON
+      transformResponse: [(data) => data]
     });
     return response.data;
   },
 
   signin: async (data: SignInRequest): Promise<SignInResponse> => {
     const response = await apiClient.post<SignInResponse>('/Account/signin', data);
+    console.log('🔐 SignIn Response:', response.data);
     return response.data;
   },
 
@@ -49,16 +71,40 @@ export const authAPI = {
 
   resetPassword: async (data: ResetPasswordRequest): Promise<string> => {
     const response = await apiClient.post('/Account/reset-password', data, {
-      transformResponse: [(data) => data] // Keep as string, don't parse JSON
+      transformResponse: [(data) => data]
     });
     return response.data;
   },
-};
+
+  // 2FA APIs - Updated to match your API response
+  enable2FA: async (data: Enable2FARequest): Promise<Enable2FAResponse> => {
+    try {
+      const response = await apiClient.post<Enable2FAResponse>('/Account/enable-2fa', data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Enable 2FA error:', error);
+      throw new Error(
+        error.response?.data?.message || 
+        'Failed to enable 2FA. Please try again.'
+      );
+    }
+  },
+
+  verify2FA: async (data: Verify2FARequest): Promise<Verify2FAResponse> => {
+    try {
+      const response = await apiClient.post<Verify2FAResponse>('/Account/verify-2fa', data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Verify 2FA error:', error);
+      throw new Error(
+        error.response?.data?.message || 
+        'Invalid verification code. Please try again.'
+      );
+    }
+  },
+}
 
 
-// In api/profileAPI.ts
-// Update your smsAPI in api/profileAPI.ts
-// In your smsAPI file (likely services/smsAPI.ts or similar)
 
 export const smsAPI = {
   sendOTP: async (phoneNumber: string) => {

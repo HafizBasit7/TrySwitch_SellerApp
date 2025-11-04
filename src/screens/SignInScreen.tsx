@@ -8,7 +8,7 @@ import {
   Image,
   SafeAreaView,
   ScrollView,
-  Dimensions
+  Dimensions,
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { AuthStackParamList } from '../types/auth';
@@ -28,6 +28,7 @@ const SignInScreen: React.FC<Props> = ({ navigation }) => {
   const [showToast, setShowToast] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string>('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
+  
   const { signIn } = useAuth();
 
   const showToastMessage = (message: string, type: 'success' | 'error') => {
@@ -64,84 +65,100 @@ const SignInScreen: React.FC<Props> = ({ navigation }) => {
 
       const response = await authAPI.signin(signInData);
       
-      console.log('✅ Login successful - Token received:', response.token);
+      console.log('🔐 SignIn API Response:', response);
       
-      if (response.token) {
+      // Check if 2FA is required
+      if (response.requiresOtp) {
+        console.log('🔐 2FA Required - Navigating to OTP screen');
+        // Navigate to OTP screen for 2FA verification
+        navigation.navigate('Otp', {
+          email: signInData.email,
+          userProfileType: signInData.userProfileType,
+          is2FA: true, // Add this flag to indicate it's for 2FA
+          signInData: signInData, // Pass the signin data for verification
+        });
+        showToastMessage(response.message || 'Verification code sent to your email', 'success');
+      } 
+      // Regular login without 2FA
+      else if (response.token) {
+        console.log('✅ Login successful - Token received:', response.token);
         await signIn(response.token);
-        // console.log('✅ Token saved to AuthContext - should navigate to Home automatically');
-      } else {
+      } 
+      else {
         showToastMessage('No token received from server. Please try again.', 'error');
       }
       
     } catch (error: any) {
       console.log('SignIn error:', error.response?.data);
-      
-      // Handle specific error cases with appropriate messages
-      let errorMessage = 'Sign in failed. Please try again.';
-      
-      if (error.response?.data) {
-        const errorData = error.response.data;
-        
-        // Handle string error messages
-        if (typeof errorData === 'string') {
-          const lowerError = errorData.toLowerCase();
-          if (lowerError.includes('invalid credentials') || lowerError.includes('wrong password') || lowerError.includes('incorrect password')) {
-            errorMessage = 'Invalid email or password. Please try again.';
-          } else if (lowerError.includes('user not found') || lowerError.includes('account not found')) {
-            errorMessage = 'No account found with this email. Please sign up.';
-          } else if (lowerError.includes('inactive') || lowerError.includes('disabled')) {
-            errorMessage = 'Your account is inactive. Please contact support.';
-          } else if (lowerError.includes('email') && lowerError.includes('verify')) {
-            errorMessage = 'Please verify your email address before signing in.';
-          } else {
-            errorMessage = errorData;
-          }
-        } 
-        // Handle object error messages
-        else if (errorData.message) {
-          const message = errorData.message.toLowerCase();
-          if (message.includes('invalid credentials') || message.includes('wrong password') || message.includes('incorrect password')) {
-            errorMessage = 'Invalid email or password. Please try again.';
-          } else if (message.includes('user not found') || message.includes('account not found')) {
-            errorMessage = 'No account found with this email. Please sign up.';
-          } else if (message.includes('inactive') || message.includes('disabled')) {
-            errorMessage = 'Your account is inactive. Please contact support.';
-          } else if (message.includes('email') && message.includes('verify')) {
-            errorMessage = 'Please verify your email address before signing in.';
-          } else {
-            errorMessage = errorData.message;
-          }
-        }
-        // Handle array error messages (common in ASP.NET)
-        else if (Array.isArray(errorData)) {
-          const firstError = errorData[0]?.toLowerCase() || '';
-          if (firstError.includes('invalid credentials') || firstError.includes('wrong password')) {
-            errorMessage = 'Invalid email or password. Please try again.';
-          } else if (firstError.includes('user not found')) {
-            errorMessage = 'No account found with this email. Please sign up.';
-          } else {
-            errorMessage = errorData[0] || errorMessage;
-          }
-        }
-      }
-      
-      // Network or server errors
-      if (error.message?.includes('Network Error') || error.message?.includes('timeout')) {
-        errorMessage = 'Network error. Please check your connection and try again.';
-      } else if (error.response?.status === 500) {
-        errorMessage = 'Server error. Please try again later.';
-      } else if (error.response?.status === 401) {
-        errorMessage = 'Invalid email or password. Please try again.';
-      } else if (error.response?.status === 404) {
-        errorMessage = 'Service unavailable. Please try again later.';
-      } else if (error.response?.status === 403) {
-        errorMessage = 'Access denied. Password is incorrect';
-      }
-      
-      showToastMessage(errorMessage, 'error');
+      handleSignInError(error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSignInError = (error: any): void => {
+    let errorMessage = 'Sign in failed. Please try again.';
+    
+    if (error.response?.data) {
+      const errorData = error.response.data;
+      
+      // Handle string error messages
+      if (typeof errorData === 'string') {
+        const lowerError = errorData.toLowerCase();
+        if (lowerError.includes('invalid credentials') || lowerError.includes('wrong password') || lowerError.includes('incorrect password')) {
+          errorMessage = 'Invalid email or password. Please try again.';
+        } else if (lowerError.includes('user not found') || lowerError.includes('account not found')) {
+          errorMessage = 'No account found with this email. Please sign up.';
+        } else if (lowerError.includes('inactive') || lowerError.includes('disabled')) {
+          errorMessage = 'Your account is inactive. Please contact support.';
+        } else if (lowerError.includes('email') && lowerError.includes('verify')) {
+          errorMessage = 'Please verify your email address before signing in.';
+        } else {
+          errorMessage = errorData;
+        }
+      } 
+      // Handle object error messages
+      else if (errorData.message) {
+        const message = errorData.message.toLowerCase();
+        if (message.includes('invalid credentials') || message.includes('wrong password') || message.includes('incorrect password')) {
+          errorMessage = 'Invalid email or password. Please try again.';
+        } else if (message.includes('user not found') || message.includes('account not found')) {
+          errorMessage = 'No account found with this email. Please sign up.';
+        } else if (message.includes('inactive') || message.includes('disabled')) {
+          errorMessage = 'Your account is inactive. Please contact support.';
+        } else if (message.includes('email') && message.includes('verify')) {
+          errorMessage = 'Please verify your email address before signing in.';
+        } else {
+          errorMessage = errorData.message;
+        }
+      }
+      // Handle array error messages (common in ASP.NET)
+      else if (Array.isArray(errorData)) {
+        const firstError = errorData[0]?.toLowerCase() || '';
+        if (firstError.includes('invalid credentials') || firstError.includes('wrong password')) {
+          errorMessage = 'Invalid email or password. Please try again.';
+        } else if (firstError.includes('user not found')) {
+          errorMessage = 'No account found with this email. Please sign up.';
+        } else {
+          errorMessage = errorData[0] || errorMessage;
+        }
+      }
+    }
+    
+    // Network or server errors
+    if (error.message?.includes('Network Error') || error.message?.includes('timeout')) {
+      errorMessage = 'Network error. Please check your connection and try again.';
+    } else if (error.response?.status === 500) {
+      errorMessage = 'Server error. Please try again later.';
+    } else if (error.response?.status === 401) {
+      errorMessage = 'Invalid email or password. Please try again.';
+    } else if (error.response?.status === 404) {
+      errorMessage = 'Service unavailable. Please try again later.';
+    } else if (error.response?.status === 403) {
+      errorMessage = 'Access denied. Password is incorrect';
+    }
+    
+    showToastMessage(errorMessage, 'error');
   };
 
   const toggleShowPassword = () => setShowPassword(prev => !prev);
@@ -281,9 +298,9 @@ const styles = StyleSheet.create({
   logo: { width: 250, height: 100 },
   card: {
     backgroundColor: 'white',
-    borderTopLeftRadius: 50,   // Curve only top left
-    borderTopRightRadius: 50,  // Curve only top right
-    borderBottomLeftRadius: 0, // Keep bottom flat
+    borderTopLeftRadius: 50,
+    borderTopRightRadius: 50,
+    borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
     padding: 32,
     width: '100%',
@@ -295,7 +312,7 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.25,
     shadowRadius: 12,
-    marginTop: 50, // Add space for the logo
+    marginTop: 50,
   },
   title: {
     fontSize: 22,

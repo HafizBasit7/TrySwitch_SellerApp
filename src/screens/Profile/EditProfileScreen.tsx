@@ -150,53 +150,96 @@ const EditProfileScreen: React.FC = () => {
   }, [route.params]);
 
 
-  const handleSendOTP = async () => {
-    if (!formData.phoneNumber.trim()) {
-      Alert.alert('Error', 'Please enter your mobile number first');
-      return;
-    }
-  
-    // Basic validation - ensure it's a Pakistani mobile number
-    const cleanNumber = formData.phoneNumber.replace(/\D/g, '');
-    
-    // Pakistani mobile numbers: 03XXXXXXXXX or 3XXXXXXXXX
-    if (cleanNumber.length < 10) {
-      Alert.alert('Invalid Phone Number', 'Please enter a valid 11-digit mobile number (e.g., 03001234567)');
-      return;
-    }
-  
-    // Check if it's a valid Pakistani mobile format
-    const isValidPakistaniNumber = 
-      (cleanNumber.startsWith('03') && cleanNumber.length === 11) ||
-      (cleanNumber.startsWith('3') && cleanNumber.length === 10) ||
-      (cleanNumber.startsWith('923') && cleanNumber.length === 12);
-  
-    if (!isValidPakistaniNumber) {
-      Alert.alert('Invalid Phone Number', 'Please enter a valid Pakistani mobile number (e.g., 03001234567)');
-      return;
-    }
-  
-    setIsSendingOTP(true);
-    setVerificationError('');
-  
-    try {
-      console.log('📱 Starting OTP send for:', formData.phoneNumber);
-      const response = await smsAPI.sendOTP(formData.phoneNumber);
-      
-      console.log('✅ OTP sent successfully');
-      setIsVerificationModalVisible(true);
-      Alert.alert('Success', response.message || 'Verification code sent to your phone');
-      
-    } catch (error: any) {
-      console.error('❌ Failed to send OTP:', error);
-      const errorMessage = error.message || 'Failed to send verification code';
-      setVerificationError(errorMessage);
-      Alert.alert('Error', errorMessage);
-    } finally {
-      setIsSendingOTP(false);
-    }
-  };
+const handleSendOTP = async () => {
+  if (!formData.phoneNumber.trim()) {
+    Alert.alert('Error', 'Please enter your mobile number first');
+    return;
+  }
 
+  // Enhanced validation for Pakistani mobile numbers
+  const cleanNumber = formData.phoneNumber.replace(/\D/g, '');
+  
+  console.log('🔍 Validating phone number:', {
+    original: formData.phoneNumber,
+    cleaned: cleanNumber,
+    length: cleanNumber.length
+  });
+
+  // Pakistani mobile number validation
+  let isValidPakistaniNumber = false;
+  let formattedNumber = cleanNumber;
+
+  // Check different Pakistani mobile formats
+  if (cleanNumber.startsWith('92') && cleanNumber.length === 12) {
+    formattedNumber = cleanNumber.substring(2);
+    isValidPakistaniNumber = true;
+  } else if (cleanNumber.startsWith('0') && cleanNumber.length === 11) {
+    formattedNumber = cleanNumber.substring(1);
+    isValidPakistaniNumber = true;
+  } else if (cleanNumber.startsWith('3') && cleanNumber.length === 10) {
+    isValidPakistaniNumber = true;
+  } else if (cleanNumber.length === 11 && /^[0-9]+$/.test(cleanNumber)) {
+    isValidPakistaniNumber = true;
+  }
+
+  if (!isValidPakistaniNumber) {
+    Alert.alert(
+      'Invalid Phone Number', 
+      'Please enter a valid Pakistani mobile number.\n\nExamples:\n• 03001234567\n• 3001234567\n• 923001234567'
+    );
+    return;
+  }
+
+  // Final length check - must be exactly 10 digits
+  if (formattedNumber.length !== 10) {
+    Alert.alert(
+      'Invalid Phone Number', 
+      'Please enter a valid 10-digit mobile number.'
+    );
+    return;
+  }
+
+  setIsSendingOTP(true);
+  setVerificationError('');
+
+  try {
+    console.log('📱 Starting OTP send for:', {
+      original: formData.phoneNumber,
+      formatted: formattedNumber
+    });
+
+    // DEBUG: Show what we're sending
+    const finalFormattedNumber = `${formattedNumber.substring(0, 3)}-${formattedNumber.substring(3, 6)}-${formattedNumber.substring(6)}`;
+    console.log('🔧 DEBUG - Final formatted number:', finalFormattedNumber);
+
+    const response = await smsAPI.sendOTP(formattedNumber);
+    
+    console.log('✅ OTP sent successfully:', response);
+    
+    // Update form data with the formatted number (keep it in display format)
+    setFormData(prev => ({ 
+      ...prev, 
+      phoneNumber: formattedNumber // Keep as digits for display
+    }));
+    
+    setIsVerificationModalVisible(true);
+    Alert.alert('Success', response.message || 'Verification code sent to your phone');
+    
+  } catch (error: any) {
+    console.error('❌ Failed to send OTP:', {
+      error: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+
+    let errorMessage = error.message || 'Failed to send verification code';
+    
+    setVerificationError(errorMessage);
+    Alert.alert('Error', errorMessage);
+  } finally {
+    setIsSendingOTP(false);
+  }
+};
   // Verify OTP Function
   const handleVerifyOTP = async () => {
     if (!otpCode.trim()) {
@@ -258,85 +301,92 @@ const EditProfileScreen: React.FC = () => {
     }
   };
 
-  const loadExistingProfile = async () => {
-    try {
-      setLoading(true);
-      const response = await profileAPI.getSellerProfile();
+ const loadExistingProfile = async () => {
+  try {
+    setLoading(true);
+    const response = await profileAPI.getSellerProfile();
 
-      if (response.sellerProfile) {
-        const profile = response.sellerProfile;
-        console.log('Loading existing profile:', profile);
+    if (response.sellerProfile) {
+      const profile = response.sellerProfile;
+      // console.log('Loading existing profile:', profile);
 
-        // Check if profile is deleted
-        if (profile.status === 'Deleted') {
-          setProfileDeleted(true);
-          Alert.alert('Profile Deleted', 'Your profile has been deleted. Please create a new profile.');
-          return;
-        }
-
-        setProfileExists(true);
-
-        const safeValue = (value: any, defaultValue: any = '') => {
-          if (!isValidValue(value)) return defaultValue;
-          return value;
-        };
-
-        const servingStatesArray = isValidValue(profile.servingStates)
-          ? (typeof profile.servingStates === 'string' ? profile.servingStates.split(',').map((s: string) => s.trim()) : profile.servingStates)
-          : [];
-
-        const languagesArray = isValidValue(profile.language)
-          ? (typeof profile.language === 'string' ? profile.language.split(',').map((l: string) => l.trim()) : profile.language)
-          : [];
-
-        const marketArray = isValidValue(profile.market)
-          ? (typeof profile.market === 'string' ? profile.market.split(',').map((m: string) => m.trim()) : profile.market)
-          : [];
-
-        setFormData({
-          name: safeValue(profile.name),
-          email: safeValue(profile.email, userInfo?.email || ''),
-          phoneNumber: safeValue(profile.phoneNumber),
-          businessName: safeValue(profile.businessName),
-          personalWebsite: safeValue(profile.personalWebsite),
-          servingStates: servingStatesArray,
-          numberOfYears: isValidValue(profile.noOfYears) ? profile.noOfYears : 0,
-          languages: languagesArray,
-          userProfileImage: safeValue(profile.userProfileImage),
-          passportUploads: Array.isArray(profile.passports) ? profile.passports : [],
-          driversLicenseUploads: Array.isArray(profile.driversLicenses) ? profile.driversLicenses : [],
-          stateIDUploads: Array.isArray(profile.stateIDs) ? profile.stateIDs : [],
-          militaryIdUploads: Array.isArray(profile.militaryIds) ? profile.militaryIds : [],
-          greenCardUploads: Array.isArray(profile.greenCards) ? profile.greenCards : [],
-          votersCardUploads: Array.isArray(profile.votersCards) ? profile.votersCards : [],
-          realStateIdNo: safeValue(profile.realStateIdNo),
-          realStateId: safeValue(profile.realStateId),
-          companyLogo: safeValue(profile.companyLogo),
-          brokerName: safeValue(profile.brokerName),
-          brokerContact: safeValue(profile.brokerContact),
-          market: marketArray,
-          geographicalAreas: safeValue(profile.geographicalAreas),
-          aboutMe: safeValue(profile.aboutMe),
-          facebook: safeValue(profile.facebook),
-          twitter: safeValue(profile.twitter),
-          linkedIn: safeValue(profile.linkedIn),
-          youtube: safeValue(profile.youtube),
-          tikTok: safeValue(profile.tikTok),
-          instagram: safeValue(profile.instagram),
-        });
-      }
-    } catch (error: any) {
-      console.error('Error loading existing profile:', error);
-      if (error.response?.data?.details === 'This profile is deleted.') {
+      // Check if profile is deleted
+      if (profile.status === 'Deleted') {
         setProfileDeleted(true);
         Alert.alert('Profile Deleted', 'Your profile has been deleted. Please create a new profile.');
-      } else {
-        Alert.alert('Error', 'Failed to load profile data');
+        return;
       }
-    } finally {
-      setLoading(false);
+
+      setProfileExists(true);
+
+      const safeValue = (value: any, defaultValue: any = '') => {
+        if (!isValidValue(value)) return defaultValue;
+        return value;
+      };
+
+      const servingStatesArray = isValidValue(profile.servingStates)
+        ? (typeof profile.servingStates === 'string' ? profile.servingStates.split(',').map((s: string) => s.trim()) : profile.servingStates)
+        : [];
+
+      const languagesArray = isValidValue(profile.language)
+        ? (typeof profile.language === 'string' ? profile.language.split(',').map((l: string) => l.trim()) : profile.language)
+        : [];
+
+      const marketArray = isValidValue(profile.market)
+        ? (typeof profile.market === 'string' ? profile.market.split(',').map((m: string) => m.trim()) : profile.market)
+        : [];
+
+      setFormData({
+        name: safeValue(profile.name),
+        email: safeValue(profile.email, userInfo?.email || ''),
+        phoneNumber: safeValue(profile.phoneNumber),
+        businessName: safeValue(profile.businessName),
+        personalWebsite: safeValue(profile.personalWebsite),
+        servingStates: servingStatesArray,
+        numberOfYears: isValidValue(profile.noOfYears) ? profile.noOfYears : 0,
+        languages: languagesArray,
+        userProfileImage: safeValue(profile.userProfileImage),
+        passportUploads: Array.isArray(profile.passports) ? profile.passports : [],
+        driversLicenseUploads: Array.isArray(profile.driversLicenses) ? profile.driversLicenses : [],
+        stateIDUploads: Array.isArray(profile.stateIDs) ? profile.stateIDs : [],
+        militaryIdUploads: Array.isArray(profile.militaryIds) ? profile.militaryIds : [],
+        greenCardUploads: Array.isArray(profile.greenCards) ? profile.greenCards : [],
+        votersCardUploads: Array.isArray(profile.votersCards) ? profile.votersCards : [],
+        realStateIdNo: safeValue(profile.realStateIdNo),
+        realStateId: safeValue(profile.realStateId),
+        companyLogo: safeValue(profile.companyLogo),
+        brokerName: safeValue(profile.brokerName),
+        brokerContact: safeValue(profile.brokerContact),
+        market: marketArray,
+        geographicalAreas: safeValue(profile.geographicalAreas),
+        aboutMe: safeValue(profile.aboutMe),
+        facebook: safeValue(profile.facebook),
+        twitter: safeValue(profile.twitter),
+        linkedIn: safeValue(profile.linkedIn),
+        youtube: safeValue(profile.youtube),
+        tikTok: safeValue(profile.tikTok),
+        instagram: safeValue(profile.instagram),
+      });
+
+      // FIX: Set phone verification status based on existing profile
+      // If the profile exists and has a phone number, assume it's verified
+      // You might want to add a specific field in your API for phone verification status
+      if (isValidValue(profile.phoneNumber)) {
+        setIsPhoneVerified(true);
+      }
     }
-  };
+  } catch (error: any) {
+    console.error('Error loading existing profile:', error);
+    if (error.response?.data?.details === 'This profile is deleted.') {
+      setProfileDeleted(true);
+      Alert.alert('Profile Deleted', 'Your profile has been deleted. Please create a new profile.');
+    } else {
+      Alert.alert('Error', 'Failed to load profile data');
+    }
+  } finally {
+    setLoading(false);
+  }
+};
 
   const pickImage = async (type: 'profile' | 'logo' | 'realEstateId') => {
     console.log(`Picking image for: ${type}`);
@@ -514,8 +564,8 @@ const EditProfileScreen: React.FC = () => {
         ...(isValidValue(formData.instagram) && { Instagram: formData.instagram }),
       };
   
-      console.log('🔄 Processing seller profile...');
-      console.log('📤 Request Data:', JSON.stringify(payload, null, 2));
+      // console.log('🔄 Processing seller profile...');
+      // console.log('📤 Request Data:', JSON.stringify(payload, null, 2));
   
       let response;
   
@@ -528,7 +578,7 @@ const EditProfileScreen: React.FC = () => {
         response = await profileAPI.updateSellerProfile(payload);
       }
   
-      console.log('✅ Profile operation successful:', response);
+      // console.log('✅ Profile operation successful:', response);
   
       Alert.alert(
         'Success',
@@ -858,7 +908,7 @@ const EditProfileScreen: React.FC = () => {
               <View style={styles.inputWithBadge}>
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter Your Mobile Number"
+                  placeholder="000-000-0000"
                   placeholderTextColor="#999"
                   keyboardType="phone-pad"
                   value={formData.phoneNumber}
@@ -893,7 +943,7 @@ const EditProfileScreen: React.FC = () => {
             </View>
             {isPhoneVerified && (
               <Text style={styles.verifiedSuccessText}>
-                ✓ Phone number verified successfully
+                {/* ✓ Phone number verified successfully */}
               </Text>
             )}
           </View>
@@ -1282,8 +1332,12 @@ const EditProfileScreen: React.FC = () => {
 
 {/* YouTube */}
 <View style={styles.formGroup}>
-  <Text style={styles.label}>YouTube</Text>
   <View style={styles.inputContainer}>
+     <Image
+              source={require('../../assets/icons/youtube.png')}
+              style={styles.socialMediaIcon}
+              resizeMode="contain"
+            />
     <TextInput
       style={styles.input}
       placeholder="Enter YouTube channel URL"
@@ -1298,8 +1352,12 @@ const EditProfileScreen: React.FC = () => {
 
 {/* TikTok */}
 <View style={styles.formGroup}>
-  <Text style={styles.label}>TikTok</Text>
   <View style={styles.inputContainer}>
+     <Image
+              source={require('../../assets/icons/tiktok.png')}
+              style={styles.socialMediaIcon}
+              resizeMode="contain"
+            />
     <TextInput
       style={styles.input}
       placeholder="Enter TikTok profile URL"
@@ -1314,8 +1372,12 @@ const EditProfileScreen: React.FC = () => {
 
 {/* Instagram */}
 <View style={styles.formGroup}>
-  <Text style={styles.label}>Instagram</Text>
   <View style={styles.inputContainer}>
+     <Image
+              source={require('../../assets/icons/instagram.png')}
+              style={styles.socialMediaIcon}
+              resizeMode="contain"
+            />
     <TextInput
       style={styles.input}
       placeholder="Enter Instagram profile URL"

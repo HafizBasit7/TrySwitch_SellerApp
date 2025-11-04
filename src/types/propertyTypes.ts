@@ -81,7 +81,9 @@ export interface PropertyListing {
     'Condo',
     'Multifamily',
     'Manufactured',
-    'Co-op'
+    'Co-op',
+    'Land',
+    'Other'
   ] as const;
   
   export const HEATING_OPTIONS = [

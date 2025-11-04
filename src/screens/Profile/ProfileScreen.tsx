@@ -1,4 +1,4 @@
-import React,{useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -51,22 +51,22 @@ const ProfileScreen: React.FC = () => {
       setProfileDeleted(false);
       setIsFirstTimeUser(false);
 
-      console.log('🔄 Fetching seller profile...');
+      // console.log('🔄 Fetching seller profile...');
       const response = await profileAPI.getSellerProfile();
 
-      console.log('📦 API Response:', response);
+      // console.log('📦 API Response:', response);
 
       if (response.sellerProfile) {
-        console.log('✅ Profile data found:', response.sellerProfile);
+        // console.log('✅ Profile data found:', response.sellerProfile);
         setSellerProfile(response.sellerProfile);
         setProfileExists(true);
-        
+
         // Check if profile is deleted
         if (response.sellerProfile.status === 'Deleted') {
           setProfileDeleted(true);
         }
       } else if (response.data) {
-        console.log('✅ Profile data found in response.data:', response.data);
+        // console.log('✅ Profile data found in response.data:', response.data);
         setSellerProfile(response.data);
         setProfileExists(true);
       } else {
@@ -77,7 +77,7 @@ const ProfileScreen: React.FC = () => {
       }
     } catch (error: any) {
       console.log('❌ Error fetching profile:', error);
-      
+
       // Check specific error cases
       if (error.response?.data?.details === 'This profile is deleted.') {
         setProfileDeleted(true);
@@ -117,12 +117,22 @@ const ProfileScreen: React.FC = () => {
   };
 
   const getDisplayName = () => {
-    if (sellerProfile?.name && sellerProfile.name !== '' && sellerProfile.name !== 'string') {
-      return sellerProfile.name;
-    } else if (userInfo?.email) {
-      return userInfo.email;
+    if (activeTab === 'business') {
+      // For Business Info tab, show Business Name
+      if (sellerProfile?.businessName && sellerProfile.businessName !== '' && sellerProfile.businessName !== 'string') {
+        return sellerProfile.businessName;
+      } else {
+        return 'Business Name';
+      }
+    } else {
+      // For Profile Info and Reviews tabs, show personal name
+      if (sellerProfile?.name && sellerProfile.name !== '' && sellerProfile.name !== 'string') {
+        return sellerProfile.name;
+      } else if (userInfo?.email) {
+        return userInfo.email;
+      }
+      return 'User';
     }
-    return 'User';
   };
 
   const handleCreateProfile = () => {
@@ -174,6 +184,27 @@ const ProfileScreen: React.FC = () => {
     return '';
   };
 
+  // Helper function to get display text for any field
+  const getDisplayText = (value: any): string => {
+    if (!hasRealData(value)) {
+      return '';
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    if (typeof value === 'number') {
+      return value.toString();
+    }
+
+    if (Array.isArray(value)) {
+      return formatArrayData(value);
+    }
+
+    return '';
+  };
+
   // Render when no profile exists or profile is deleted or first time user
   const renderNoProfileState = () => {
     return (
@@ -185,16 +216,8 @@ const ProfileScreen: React.FC = () => {
             resizeMode="contain"
           />
         </View>
-        
-        {/* <Text style={styles.noProfileTitle}>
-          {profileDeleted ? 'Profile Deleted' : 'Welcome!'}
-        </Text> */}
-        
-        {/* <Text style={styles.noProfileText}>
-          {profileDeleted 
-            ? 'Your profile has been deleted. Create a new profile to get started.'
-            : 'Create your profile to get started and showcase your real estate services.'}
-        </Text> */}
+
+      
 
         <TouchableOpacity
           style={styles.createProfileButton}
@@ -233,9 +256,9 @@ const ProfileScreen: React.FC = () => {
               resizeMode="contain"
             />
           </View>
-          
+
           <Text style={styles.incompleteProfileTitle}>Complete Your Profile</Text>
-          
+
           <Text style={styles.incompleteProfileText}>
             Your profile is incomplete. Please complete all required information to activate your account.
           </Text>
@@ -271,120 +294,121 @@ const ProfileScreen: React.FC = () => {
         </View>
 
         {/* Phone - Only show if not empty */}
-        {hasRealData(sellerProfile?.phoneNumber) && (
-          <View style={styles.fieldWrapper}>
-            <Text style={styles.fieldLabelOrange}>Phone</Text>
-            <View style={styles.fieldContentBox}>
-              <Text style={styles.fieldText}>{sellerProfile!.phoneNumber}</Text>
-            </View>
+      
+        <View style={styles.fieldWrapper}>
+          <Text style={styles.fieldLabelOrange}>Phone</Text>
+          <View style={styles.fieldContentBox}>
+            <Text style={styles.fieldText}>{sellerProfile!.phoneNumber}</Text>
           </View>
-        )}
+        </View>
+    
 
         {/* About Me - Only show if not empty */}
-        {hasRealData(sellerProfile?.aboutMe) && (
-          <View style={styles.fieldWrapper}>
-            <Text style={styles.fieldLabelBlue}>About Me</Text>
-            <View style={styles.fieldContentBox}>
-              <Text style={styles.fieldText}>{sellerProfile!.aboutMe}</Text>
-            </View>
+       
+        <View style={styles.fieldWrapper}>
+          <Text style={styles.fieldLabelBlue}>About Me</Text>
+          <View style={styles.fieldContentBox}>
+            <Text style={styles.fieldText}>{sellerProfile!.aboutMe}</Text>
           </View>
-        )}
-
+        </View>
+   
         {/* Social Media Links - Only show if any exist */}
-{(hasRealData(sellerProfile?.facebook) || 
-  hasRealData(sellerProfile?.twitter) || 
-  hasRealData(sellerProfile?.linkedIn) || 
-  hasRealData(sellerProfile?.youtube) || 
-  hasRealData(sellerProfile?.tikTok) || 
-  hasRealData(sellerProfile?.instagram)) && (
-  <View style={styles.fieldWrapper}>
-    {/* <Text style={styles.fieldLabelBlue}>Social Media</Text> */}
-    {/* <View style={styles.fieldContentBox}> */}
-      <View style={styles.socialMediaContainer}>
-        {hasRealData(sellerProfile?.facebook) && (
-          <TouchableOpacity 
-            style={styles.socialMediaButton}
-            onPress={() => handleSocialLink(sellerProfile!.facebook)}
-          >
-            {/* <Text style={styles.socialMediaIcon}>📘</Text> */}
-            <Image
-              source={require('../../assets/icons/facebook.png')}
-              style={styles.socialMediaIcon}
-              resizeMode="contain"
-            />
-            {/* <Text style={styles.socialMediaText}>Facebook</Text> */}
-          </TouchableOpacity>
-        )}
+        {(hasRealData(sellerProfile?.facebook) ||
+          hasRealData(sellerProfile?.twitter) ||
+          hasRealData(sellerProfile?.linkedIn) ||
+          hasRealData(sellerProfile?.youtube) ||
+          hasRealData(sellerProfile?.tikTok) ||
+          hasRealData(sellerProfile?.instagram)) && (
+            <View style={styles.fieldWrapper}>
+              <View style={styles.socialMediaContainer}>
+                {hasRealData(sellerProfile?.facebook) && (
+                  <TouchableOpacity
+                    style={styles.socialMediaButton}
+                    onPress={() => handleSocialLink(sellerProfile!.facebook)}
+                  >
+                    {/* <Text style={styles.socialMediaIcon}>📘</Text> */}
+                    <Image
+                      source={require('../../assets/icons/facebook.png')}
+                      style={styles.socialMediaIcon}
+                      resizeMode="contain"
+                    />
+                    {/* <Text style={styles.socialMediaText}>Facebook</Text> */}
+                  </TouchableOpacity>
+                )}
+
+                {hasRealData(sellerProfile?.twitter) && (
+                  <TouchableOpacity
+                    style={styles.socialMediaButton}
+                    onPress={() => handleSocialLink(sellerProfile!.twitter)}
+                  >
+                    <Image
+                      source={require('../../assets/icons/twitter.png')}
+                      style={styles.socialMediaIcon}
+                      resizeMode="contain"
+                    />
+                  </TouchableOpacity>
+                )}
+
+                {hasRealData(sellerProfile?.linkedIn) && (
+                  <TouchableOpacity
+                    style={styles.socialMediaButton}
+                    onPress={() => handleSocialLink(sellerProfile!.linkedIn)}
+                  >
+                    <Text style={styles.socialMediaIcon}>💼</Text>
+                    <Text style={styles.socialMediaText}>LinkedIn</Text>
+                  </TouchableOpacity>
+                )}
+
+                {hasRealData(sellerProfile?.youtube) && (
+                  <TouchableOpacity
+                    style={styles.socialMediaButton}
+                    onPress={() => handleSocialLink(sellerProfile!.youtube)}
+                  >
+                    <Text style={styles.socialMediaIcon}>▶️</Text>
+                    <Text style={styles.socialMediaText}>YouTube</Text>
+                  </TouchableOpacity>
+                )}
+
+                {hasRealData(sellerProfile?.tikTok) && (
+                  <TouchableOpacity
+                    style={styles.socialMediaButton}
+                    onPress={() => handleSocialLink(sellerProfile!.tikTok)}
+                  >
+                    <Text style={styles.socialMediaIcon}>🎵</Text>
+                    <Text style={styles.socialMediaText}>TikTok</Text>
+                  </TouchableOpacity>
+                )}
+
+                {hasRealData(sellerProfile?.instagram) && (
+                  <TouchableOpacity
+                    style={styles.socialMediaButton}
+                    onPress={() => handleSocialLink(sellerProfile!.instagram)}
+                  >
+                    {/* <Text style={styles.socialMediaIcon}>📷</Text> */}
+                    <Image 
+                    source={require('../../assets/icons/instagram.png')}
+                    style={styles.socialMediaIcon}
+                    />
+                    {/* <Text style={styles.socialMediaText}>Instagram</Text> */}
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
         
-        {hasRealData(sellerProfile?.twitter) && (
-          <TouchableOpacity 
-            style={styles.socialMediaButton}
-            onPress={() => handleSocialLink(sellerProfile!.twitter)}
-          >
-            <Image
-              source={require('../../assets/icons/twitter.png')}
-              style={styles.socialMediaIcon}
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
-        )}
-        
-        {hasRealData(sellerProfile?.linkedIn) && (
-          <TouchableOpacity 
-            style={styles.socialMediaButton}
-            onPress={() => handleSocialLink(sellerProfile!.linkedIn)}
-          >
-            <Text style={styles.socialMediaIcon}>💼</Text>
-            <Text style={styles.socialMediaText}>LinkedIn</Text>
-          </TouchableOpacity>
-        )}
-        
-        {hasRealData(sellerProfile?.youtube) && (
-          <TouchableOpacity 
-            style={styles.socialMediaButton}
-            onPress={() => handleSocialLink(sellerProfile!.youtube)}
-          >
-            <Text style={styles.socialMediaIcon}>▶️</Text>
-            <Text style={styles.socialMediaText}>YouTube</Text>
-          </TouchableOpacity>
-        )}
-        
-        {hasRealData(sellerProfile?.tikTok) && (
-          <TouchableOpacity 
-            style={styles.socialMediaButton}
-            onPress={() => handleSocialLink(sellerProfile!.tikTok)}
-          >
-            <Text style={styles.socialMediaIcon}>🎵</Text>
-            <Text style={styles.socialMediaText}>TikTok</Text>
-          </TouchableOpacity>
-        )}
-        
-        {hasRealData(sellerProfile?.instagram) && (
-          <TouchableOpacity 
-            style={styles.socialMediaButton}
-            onPress={() => handleSocialLink(sellerProfile!.instagram)}
-          >
-            <Text style={styles.socialMediaIcon}>📷</Text>
-            <Text style={styles.socialMediaText}>Instagram</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  // </View>
-)}
+          )}
 
         {/* Location - Only show if not empty */}
-        {hasRealData(sellerProfile?.geographicalAreas) && (
+
           <View style={styles.fieldWrapper}>
             <Text style={styles.fieldLabelOrange}>Location</Text>
             <View style={styles.fieldContentBox}>
               <Text style={styles.fieldText}>{sellerProfile!.geographicalAreas}</Text>
             </View>
           </View>
-        )}
+     
 
         {/* Serving States - Only show if not empty */}
-        {hasRealData(sellerProfile?.servingStates) && (
+
           <View style={styles.fieldWrapper}>
             <Text style={styles.fieldLabelBlue}>Serving States</Text>
             <View style={styles.fieldContentBox}>
@@ -393,7 +417,7 @@ const ProfileScreen: React.FC = () => {
               </Text>
             </View>
           </View>
-        )}
+
 
         <TouchableOpacity
           style={styles.editProfileButton}
@@ -429,9 +453,9 @@ const ProfileScreen: React.FC = () => {
               resizeMode="contain"
             />
           </View>
-          
+
           <Text style={styles.incompleteProfileTitle}>Complete Your Profile</Text>
-          
+
           <Text style={styles.incompleteProfileText}>
             Your profile is incomplete. Please complete all required information to activate your account.
           </Text>
@@ -459,37 +483,37 @@ const ProfileScreen: React.FC = () => {
     return (
       <View style={styles.infoContainer}>
         {/* Business Name - Only show if not empty */}
-        {hasRealData(sellerProfile?.businessName) && (
+
           <View style={styles.fieldWrapper}>
             <Text style={styles.fieldLabelBlue}>Business Name</Text>
             <View style={styles.fieldContentBox}>
               <Text style={styles.fieldText}>{sellerProfile!.businessName}</Text>
             </View>
           </View>
-        )}
+      
 
         {/* Website - Only show if not empty */}
-        {hasRealData(sellerProfile?.personalWebsite) && (
+
           <View style={styles.fieldWrapper}>
             <Text style={styles.fieldLabelOrange}>Website</Text>
             <View style={styles.fieldContentBox}>
               <Text style={styles.fieldText}>{sellerProfile!.personalWebsite}</Text>
             </View>
           </View>
-        )}
+    
 
         {/* Years in Real Estate - Only show if greater than 0 */}
-        {hasRealData(sellerProfile?.noOfYears) && (
+    
           <View style={styles.fieldWrapper}>
             <Text style={styles.fieldLabelBlue}>Years in Real Estate</Text>
             <View style={styles.fieldContentBox}>
               <Text style={styles.fieldText}>{sellerProfile!.noOfYears}</Text>
             </View>
           </View>
-        )}
+  
 
         {/* Language Spoken - Only show if not empty */}
-        {hasRealData(sellerProfile?.language) && (
+ 
           <View style={styles.fieldWrapper}>
             <Text style={styles.fieldLabelOrange}>Language Spoken</Text>
             <View style={styles.fieldContentBox}>
@@ -498,10 +522,10 @@ const ProfileScreen: React.FC = () => {
               </Text>
             </View>
           </View>
-        )}
+     
 
         {/* Market Specialties - Only show if not empty */}
-        {hasRealData(sellerProfile?.market) && (
+     
           <View style={styles.fieldWrapper}>
             <Text style={styles.fieldLabelBlue}>Market Specialties</Text>
             <View style={styles.fieldContentBox}>
@@ -510,37 +534,37 @@ const ProfileScreen: React.FC = () => {
               </Text>
             </View>
           </View>
-        )}
+       
 
         {/* Brokerage Name - Only show if not empty */}
-        {hasRealData(sellerProfile?.brokerName) && (
+
           <View style={styles.fieldWrapper}>
             <Text style={styles.fieldLabelOrange}>Brokerage Name</Text>
             <View style={styles.fieldContentBox}>
               <Text style={styles.fieldText}>{sellerProfile!.brokerName}</Text>
             </View>
           </View>
-        )}
+      
 
         {/* Brokerage Contact - Only show if not empty */}
-        {hasRealData(sellerProfile?.brokerContact) && (
+        
           <View style={styles.fieldWrapper}>
             <Text style={styles.fieldLabelBlue}>Brokerage Contact</Text>
             <View style={styles.fieldContentBox}>
               <Text style={styles.fieldText}>{sellerProfile!.brokerContact}</Text>
             </View>
           </View>
-        )}
+      
 
         {/* Real Estate ID - Only show if not empty */}
-        {hasRealData(sellerProfile?.realStateIdNo) && (
+    
           <View style={styles.fieldWrapper}>
             <Text style={styles.fieldLabelOrange}>Real Estate ID</Text>
             <View style={styles.fieldContentBox}>
               <Text style={styles.fieldText}>{sellerProfile!.realStateIdNo}</Text>
             </View>
           </View>
-        )}
+    
       </View>
     );
   };
@@ -650,57 +674,57 @@ const ProfileScreen: React.FC = () => {
         >
           <Text style={styles.userName}>{getDisplayName()}</Text>
 
-         
-            <>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.tabsScrollContainer}
-                contentContainerStyle={styles.tabsContentContainer}
+
+          <>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.tabsScrollContainer}
+              contentContainerStyle={styles.tabsContentContainer}
+            >
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'profile' && styles.activeTab]}
+                onPress={() => setActiveTab('profile')}
               >
-                <TouchableOpacity
-                  style={[styles.tab, activeTab === 'profile' && styles.activeTab]}
-                  onPress={() => setActiveTab('profile')}
+                <Text
+                  style={[
+                    styles.tabText,
+                    activeTab === 'profile' && styles.activeTabText,
+                  ]}
                 >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      activeTab === 'profile' && styles.activeTabText,
-                    ]}
-                  >
-                    Profile Information
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.tab, activeTab === 'business' && styles.activeTab]}
-                  onPress={() => setActiveTab('business')}
+                  Profile Information
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'business' && styles.activeTab]}
+                onPress={() => setActiveTab('business')}
+              >
+                <Text
+                  style={[
+                    styles.tabText,
+                    activeTab === 'business' && styles.activeTabText,
+                  ]}
                 >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      activeTab === 'business' && styles.activeTabText,
-                    ]}
-                  >
-                    Business Information
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.tab, activeTab === 'reviews' && styles.activeTab]}
-                  onPress={() => setActiveTab('reviews')}
+                  Business Information
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'reviews' && styles.activeTab]}
+                onPress={() => setActiveTab('reviews')}
+              >
+                <Text
+                  style={[
+                    styles.tabText,
+                    activeTab === 'reviews' && styles.activeTabText,
+                  ]}
                 >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      activeTab === 'reviews' && styles.activeTabText,
-                    ]}
-                  >
-                    Reviews
-                  </Text>
-                </TouchableOpacity>
-              </ScrollView>
-              <View style={styles.tabDivider} />
-            </>
-         
+                  Reviews
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+            <View style={styles.tabDivider} />
+          </>
+
 
           {/* Tab Content */}
           {activeTab === 'profile' && renderProfileInformation()}
@@ -1176,18 +1200,14 @@ const styles = StyleSheet.create({
     borderRadius: 22, // Perfect circle
     justifyContent: 'center',
     alignItems: 'center',
-    
+
   },
   socialMediaIcon: {
     width: 34, // Consistent icon size
     height: 34,
     resizeMode: 'contain', // Ensure icons maintain aspect ratio
   },
-  socialMediaText: {
-    fontSize: 13,
-    color: '#374151',
-    fontWeight: '500',
-  },
+ 
 });
 
 export default ProfileScreen;

@@ -14,13 +14,14 @@ import { AuthStackParamList } from '../types/auth';
 import { authAPI } from '../api/auth';
 import Button from '../components/Button';
 import OTPTextInput from 'react-native-otp-textinput';
+import { useAuth } from '../context/AuthContext';
 
 type Props = StackScreenProps<AuthStackParamList, 'Otp'>;
 
 const { height } = Dimensions.get('window');
 
 const OtpScreen: React.FC<Props> = ({ route, navigation }) => {
-  const { email, userProfileType } = route.params;
+  const { email, userProfileType, is2FA, signInData } = route.params;
   const [otp, setOtp] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [showToast, setShowToast] = useState<boolean>(false);
@@ -28,6 +29,7 @@ const OtpScreen: React.FC<Props> = ({ route, navigation }) => {
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
   const [timer, setTimer] = useState<number>(75);
   const otpInputRef = useRef<any>(null);
+  const { signIn } = useAuth();
 
   // Timer effect
   React.useEffect(() => {
@@ -56,25 +58,56 @@ const OtpScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const handleVerifyOtp = async (): Promise<void> => {
     if (!otp || otp.length !== 5) {
-      showToastMessage('Please enter a valid 5-digit OTP', 'error');
+      showToastMessage('Please enter a valid 5-digit verification code', 'error');
       return;
     }
 
     setLoading(true);
     try {
-      await authAPI.verifyOtp({
-        email,
-        otp: parseInt(otp, 10)
-      });
-      
-      showToastMessage('OTP verified successfully!', 'success');
-      
-      setTimeout(() => {
-        navigation.navigate('CreatePassword', { email });
-      }, 1500);
+      if (is2FA) {
+        // Handle 2FA verification
+        const verifyData = {
+          email: email,
+          otp: parseInt(otp, 10),
+          userProfileType: userProfileType,
+        };
+
+        console.log('🔐 Verifying 2FA with:', verifyData);
+        
+        const result = await authAPI.verify2FA(verifyData);
+        
+        if (result.token) {
+          console.log('✅ 2FA Verification successful - Token received');
+          await signIn(result.token);
+          showToastMessage('Login successful!', 'success');
+        } else {
+          showToastMessage(result.message || 'Verification failed', 'error');
+        }
+      } else {
+        // Handle regular OTP verification (for signup)
+        await authAPI.verifyOtp({
+          email,
+          otp: parseInt(otp, 10)
+        });
+        
+        showToastMessage('OTP verified successfully!', 'success');
+        
+        setTimeout(() => {
+          navigation.navigate('CreatePassword', { email });
+        }, 1500);
+      }
       
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'OTP verification failed. Please try again.';
+      let errorMessage = is2FA 
+        ? 'Invalid verification code. Please try again.'
+        : 'OTP verification failed. Please try again.';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       showToastMessage(errorMessage, 'error');
     } finally {
       setLoading(false);
@@ -83,28 +116,31 @@ const OtpScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const handleResendOtp = async (): Promise<void> => {
     try {
-      await authAPI.forgotPassword({ 
-        email: email.trim().toLowerCase(),
-      });
+      if (is2FA) {
+        // Resend 2FA code by calling signin again
+        await authAPI.signin(signInData);
+        showToastMessage('Verification code resent successfully!', 'success');
+      } else {
+        // Resend regular OTP
+        await authAPI.forgotPassword({ 
+          email: email.trim().toLowerCase(),
+        });
+        showToastMessage('OTP resent successfully!', 'success');
+      }
       
-      showToastMessage('OTP resent successfully!', 'success');
       setOtp('');
       setTimer(75);
       
-      // Focus back on OTP input after resend - CORRECTED
+      // Focus back on OTP input after resend
       if (otpInputRef.current) {
-        otpInputRef.current.clear();
-        // For react-native-otp-textinput, we need to use the instance methods properly
-        // Let's clear and let autoFocus handle the focus, or reset the component
         setTimeout(() => {
-          // This will trigger the autoFocus again
           otpInputRef.current?.setValue('');
         }, 100);
       }
     } catch (error: any) {
-      console.log('Resend OTP error:', error);
+      console.log('Resend error:', error);
       
-      let errorMessage = 'Failed to resend OTP. Please try again.';
+      let errorMessage = 'Failed to resend code. Please try again.';
       
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
@@ -116,6 +152,24 @@ const OtpScreen: React.FC<Props> = ({ route, navigation }) => {
       
       showToastMessage(errorMessage, 'error');
     }
+  };
+
+  const getScreenTitle = () => {
+    return is2FA ? 'Authentication' : 'Sign up';
+  };
+
+  const getSubtitle = () => {
+    return is2FA 
+      ? 'Enter the verification code sent to your email to complete sign in.'
+      : 'Enter the code sent to your email to continue';
+  };
+
+  const getButtonTitle = () => {
+    return is2FA ? 'VERIFY & SIGN IN' : 'NEXT';
+  };
+
+  const getOtpLength = () => {
+    return is2FA ? 5 : 5;
   };
 
   return (
@@ -166,19 +220,19 @@ const OtpScreen: React.FC<Props> = ({ route, navigation }) => {
                 resizeMode="contain"
               />
             </TouchableOpacity>
-            <Text style={styles.title}>Sign up</Text>
+            <Text style={styles.title}>{getScreenTitle()}</Text>
             <View style={styles.placeholder} />
           </View>
           
           <Text style={styles.subtitle}>
-            Enter the code sent to your email to{"\n"}continue
+            {getSubtitle()}
           </Text>
 
           {/* OTP Input Boxes */}
           <View style={styles.otpContainer}>
             <OTPTextInput
               ref={otpInputRef}
-              inputCount={5}
+              inputCount={getOtpLength()}
               handleTextChange={setOtp}
               autoFocus={true}
               tintColor="#FF6B35"
@@ -188,35 +242,36 @@ const OtpScreen: React.FC<Props> = ({ route, navigation }) => {
             />
           </View>
 
-         {/* Timer OR Resend Link */}
-{timer > 0 ? (
-  <Text style={styles.timerText}>
-    OTP will expire in {formatTime(timer)}
-  </Text>
-) : (
-  <TouchableOpacity onPress={handleResendOtp} style={styles.resendContainer}>
-    <Text style={styles.resendLink}>Resend OTP</Text>
-  </TouchableOpacity>
-)}
+          {/* Timer OR Resend Link */}
+          {timer > 0 ? (
+            <Text style={styles.timerText}>
+              Code will expire in {formatTime(timer)}
+            </Text>
+          ) : (
+            <TouchableOpacity onPress={handleResendOtp} style={styles.resendContainer}>
+              <Text style={styles.resendLink}>Resend Code</Text>
+            </TouchableOpacity>
+          )}
 
-
-          {/* Next Button */}
+          {/* Verify Button */}
           <Button
-            title="NEXT"
+            title={getButtonTitle()}
             onPress={handleVerifyOtp}
             loading={loading}
-            disabled={!otp || otp.length !== 5}
+            disabled={!otp || otp.length !== getOtpLength()}
             style={styles.nextButton}
           />
         </View>
 
-        {/* Sign In Link */}
-        <View style={styles.signinContainer}>
-          <Text style={styles.signinText}>Already a member?</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('SignIn')}>
-            <Text style={styles.signinLink}>Login here</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Only show sign in link for non-2FA flow */}
+        {!is2FA && (
+          <View style={styles.signinContainer}>
+            <Text style={styles.signinText}>Already a member?</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('SignIn')}>
+              <Text style={styles.signinLink}>Login here</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -312,23 +367,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
   otpContainerStyle: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     width: 'auto',
   },
-  
   resendLink: {
     color: '#007AFF',
     fontWeight: '600',
     textAlign: 'center', 
     marginBottom: 10
   },
-  
-  
-  
   otpInput: {
     width: 40,
     height: 50,

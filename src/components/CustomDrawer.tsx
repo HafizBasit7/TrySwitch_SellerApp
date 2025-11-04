@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,9 @@ import {
 import { DrawerContentScrollView } from '@react-navigation/drawer';
 import { useAuth } from '../context/AuthContext';
 import { profileAPI } from '../api/profileAPI';
+import { authAPI } from '../api/auth'; 
 import Toast from 'react-native-toast-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Simple JWT decode function that works in React Native
 const decodeJWT = (token: string): any => {
@@ -64,11 +66,13 @@ const atob = (input: string): string => {
 
 const CustomDrawer = (props: any) => {
   const [isTwoFAEnabled, setIsTwoFAEnabled] = useState(false);
+  const [isLoading2FA, setIsLoading2FA] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  
   const { signOut, userToken, userInfo } = useAuth();
-
+  
   const showToast = (type: string, text1: string, text2?: string) => {
     Toast.show({
       type: type,
@@ -78,6 +82,10 @@ const CustomDrawer = (props: any) => {
       visibilityTime: 4000,
     });
   };
+
+  useEffect(() => {
+    load2FAStatus();
+  }, []);
 
   // Function to get user info from token
   const getUserInfo = () => {
@@ -90,9 +98,6 @@ const CustomDrawer = (props: any) => {
         return { profileType: 'Unknown', email: '', name: '' };
       }
       
-      // console.log('🔍 JWT Token Contents:', decoded);
-      
-      // Get profile type - handle both string and number
       const profileType = decoded.UserProfileType;
       const email = decoded.email || decoded.unique_name || '';
       const name = decoded.name || email.split('@')[0] || 'User';
@@ -101,6 +106,62 @@ const CustomDrawer = (props: any) => {
     } catch (error) {
       console.error('Error decoding token:', error);
       return { profileType: 'Unknown', email: '', name: '' };
+    }
+  };
+
+  const load2FAStatus = async () => {
+    try {
+      // Try to load 2FA status from AsyncStorage
+      const stored2FAStatus = await AsyncStorage.getItem('user2FAStatus');
+      console.log('📱 Loaded 2FA status from storage:', stored2FAStatus);
+      
+      if (stored2FAStatus !== null) {
+        setIsTwoFAEnabled(JSON.parse(stored2FAStatus));
+      } else {
+        // Default to false if no stored status
+        setIsTwoFAEnabled(false);
+      }
+    } catch (error) {
+      console.error('Error loading 2FA status:', error);
+      setIsTwoFAEnabled(false);
+    }
+  };
+
+  const save2FAStatus = async (enabled: boolean) => {
+    try {
+      await AsyncStorage.setItem('user2FAStatus', JSON.stringify(enabled));
+      console.log('💾 Saved 2FA status:', enabled);
+    } catch (error) {
+      console.error('Error saving 2FA status:', error);
+    }
+  };
+
+  const handle2FAToggle = async (enabled: boolean) => {
+    if (isLoading2FA) return;
+
+    setIsLoading2FA(true);
+    
+    try {
+      // Direct API call to enable/disable 2FA
+      await authAPI.enable2FA({ isTwoFactorEnabled: enabled });
+      
+      // Update local state
+      setIsTwoFAEnabled(enabled);
+      await save2FAStatus(enabled);
+      
+      showToast(
+        'success', 
+        `2FA ${enabled ? 'Enabled' : 'Disabled'}`, 
+        `Two-factor authentication has been ${enabled ? 'enabled' : 'disabled'}`
+      );
+      
+    } catch (error: any) {
+      console.error('2FA toggle error:', error);
+      showToast('error', '2FA Error', error.message || 'Failed to update 2FA settings');
+      // Revert the switch on error
+      setIsTwoFAEnabled(!enabled);
+    } finally {
+      setIsLoading2FA(false);
     }
   };
 
@@ -132,17 +193,15 @@ const CustomDrawer = (props: any) => {
   
     try {
       console.log('🗑️ Deleting profile for type:', profileType);
-  
-      // Add Authorization header dynamically to API call
+
       const response = await profileAPI.deleteProfile(
         profileType === '2' || profileType === 'Seller' ? 'Seller' : 'Investor'
       );
-  
+
       console.log('✅ Delete Profile Response:', response);
-  
+
       showToast('success', 'Profile Deleted', 'Your profile has been successfully deleted.');
-  
-      // Log out the user after deletion
+
       setTimeout(async () => {
         await signOut();
         props.navigation.closeDrawer();
@@ -155,7 +214,6 @@ const CustomDrawer = (props: any) => {
       const responseData = error.response?.data;
   
       try {
-        // Parse error response if it's a JSON string
         const parsedError =
           typeof responseData === 'string' ? JSON.parse(responseData) : responseData;
   
@@ -167,7 +225,6 @@ const CustomDrawer = (props: any) => {
           errorMessage = parsedError.message;
         }
       } catch {
-        // If not JSON, fallback to plain text or default message
         if (typeof responseData === 'string' && responseData.includes('already deleted')) {
           errorMessage = 'Your profile has already been deleted.';
         } else if (typeof responseData === 'string' && responseData.includes('not exist')) {
@@ -175,7 +232,6 @@ const CustomDrawer = (props: any) => {
         }
       }
   
-      // Handle status-based errors gracefully
       if (error.response?.status === 404) {
         errorMessage = 'Profile not found. You may need to complete your profile setup first.';
       } else if (error.response?.status === 401) {
@@ -187,8 +243,6 @@ const CustomDrawer = (props: any) => {
       setIsDeleting(false);
     }
   };
-  
-  
 
   const handleCloseDrawer = () => {
     props.navigation.closeDrawer();
@@ -241,7 +295,7 @@ const CustomDrawer = (props: any) => {
           onPress={handleCloseDrawer}
         >
           <Image
-            source={require('../assets/icons/cross.png')} // Make sure you have close.png in your icons folder
+            source={require('../assets/icons/cross.png')}
             style={styles.closeIcon}
             resizeMode="contain"
           />
@@ -311,7 +365,7 @@ const CustomDrawer = (props: any) => {
             </View>
             
             <Text style={styles.twoFADescription}>
-              Enable this feature to activate 2-factor authentication and enhance the security of your account.
+              Enable this feature to activate 2-factor authentication. When enabled, you'll need to enter a verification code during signin.
             </Text>
           </View>
           
@@ -319,14 +373,18 @@ const CustomDrawer = (props: any) => {
             <Text style={styles.twoFAStatusText}>
               {isTwoFAEnabled ? 'Enabled' : 'Disabled'}
             </Text>
-            <Switch
-              value={isTwoFAEnabled}
-              onValueChange={setIsTwoFAEnabled}
-              trackColor={{ false: '#FFB299', true: '#fff' }}
-              thumbColor={isTwoFAEnabled ? '#fff' : '#FF6B35'}
-              ios_backgroundColor="#FFB299"
-              disabled={isDeleting}
-            />
+            {isLoading2FA ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Switch
+                value={isTwoFAEnabled}
+                onValueChange={handle2FAToggle}
+                trackColor={{ false: '#FFB299', true: '#fff' }}
+                thumbColor={isTwoFAEnabled ? '#fff' : '#FF6B35'}
+                ios_backgroundColor="#FFB299"
+                disabled={isDeleting || isLoading2FA}
+              />
+            )}
           </View>
         </View>
       </DrawerContentScrollView>
@@ -466,7 +524,6 @@ const styles = StyleSheet.create({
     opacity: 0.9,
     marginLeft: 35,
     padding:10 
-    
   },
   twoFAToggleSection: {
     flexDirection: 'row',

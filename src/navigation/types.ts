@@ -1,34 +1,45 @@
 // src/navigation/types.ts
 import { NavigatorScreenParams } from '@react-navigation/native';
-import { 
-  AuthStackParamList as AuthStackParams,
-  AppStackParamList as AppStackParams,
-  ProfileStackParamList as ProfileStackParams,
-  BottomTabParamList as BottomTabParams 
-} from '../types/auth';
 
-// Re-export your existing types with NavigatorScreenParams where needed
-export type AuthStackParamList = AuthStackParams;
-
-export type AppStackParamList = AppStackParams;
-
-export type ProfileStackParamList = ProfileStackParams;
-
-export type ListingStackParamList = {
-  Listing: undefined;
-  CreateListing: undefined;
-};
-
-export type BottomTabParamList = BottomTabParams & {
+export type BottomTabParamList = {
   Listing: NavigatorScreenParams<ListingStackParamList>;
+  Followers: NavigatorScreenParams<FollowersStackParamList>;
+  Chats: NavigatorScreenParams<ChatsStackParamList>;
+  MyTasks: NavigatorScreenParams<TasksStackParamList>;
   Profile: NavigatorScreenParams<ProfileStackParamList>;
 };
 
-export type DrawerParamList = {
-  MainTabs: NavigatorScreenParams<BottomTabParamList>;
-  Home: undefined;
+// Add these new types for Followers and Chats stacks
+export type FollowersStackParamList = {
+  FollowersMain: undefined;
+  UserProfile: { userId: string; userName?: string };
 };
 
-export type RootStackParamList = {
-  Main: NavigatorScreenParams<DrawerParamList>;
+export type ChatsStackParamList = {
+  ChatsMain: undefined;
+  ChatConversation: { 
+    chatId: string; 
+    userId: string; 
+    userName: string;
+  };
+};
+
+// Your existing types...
+export type ListingStackParamList = {
+  ListingMain: undefined;
+  CreateListing: undefined;
+  PreviewListing: { listingData: any };
+  EditListing: { listing: any };
+  PropertyDetails: { propertyId: number };
+};
+
+export type ProfileStackParamList = {
+  ProfileMain: undefined;
+  EditProfile: undefined;
+  Settings: undefined;
+};
+
+export type TasksStackParamList = {
+  TasksMain: undefined;
+  TaskDetails: { taskId: string };
 };

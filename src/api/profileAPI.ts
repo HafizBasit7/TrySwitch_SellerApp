@@ -113,7 +113,7 @@ export const profileAPI = {
         formData.append('VotersCardUploads', '');
       }
 
-      console.log('📦 Sending multipart form data');
+      // console.log('📦 Sending multipart form data');
       
       const response = await apiClient.post<SellerProfile>(
         '/SellerProfile/UpdateSellerProfile', 
@@ -125,7 +125,7 @@ export const profileAPI = {
         }
       );
       
-      console.log('✅ Update response received:', response.data);
+      // console.log('✅ Update response received:', response.data);
       return {
         message: 'Profile updated successfully',
         success: true,
@@ -194,88 +194,91 @@ export const profileAPI = {
 };
 
 
-// SMS Verification APIs
-// Update your smsAPI in api/profileAPI.ts
+
+// SMS Verification APIs - Send Raw String
+// SMS Verification APIs - With Correct xxx-xxx-xxxx Format
 export const smsAPI = {
-  // Send OTP to phone number - expects RAW STRING
+  // Send OTP to phone number - With correct formatting
   sendOTP: async (phoneNumber: string): Promise<SendSMSResponse> => {
     try {
-      console.log('📱 Sending OTP to:', phoneNumber);
+      console.log('📱 Starting OTP send for:', phoneNumber);
       
-      // Format phone number for API - SIMPLIFIED based on API docs
+      // Format phone number for API - convert to xxx-xxx-xxxx format
       const formattedPhoneNumber = formatPhoneNumberForSMSAPI(phoneNumber);
       console.log('📱 Formatted for API:', formattedPhoneNumber);
       
-      // CORRECT WAY: Send as raw JSON string
-      // The API expects just the phone number string as JSON: "3029248522"
-      const requestData = formattedPhoneNumber; // Just the string, Axios will serialize it
+      console.log('🚀 API Request: POST /Account/SendPhonenumberOTP');
+      console.log('📤 Request Data (formatted):', formattedPhoneNumber);
       
-      console.log('📤 Request Data:', requestData);
-      
+      // Send as raw string in xxx-xxx-xxxx format
       const response = await apiClient.post(
-        '/SMS/send',
-        requestData, // Send as string, Axios will handle JSON serialization
+        '/Account/SendPhonenumberOTP',
+        formattedPhoneNumber, // This should be: "318-534-3522"
         {
           headers: {
             'Content-Type': 'application/json',
-          },
-          // Remove transformRequest - let Axios handle the serialization
+          }
         }
       );
       
-      console.log('✅ OTP sent successfully');
+      console.log('✅ OTP sent successfully:', response.data);
       return {
-        message: 'Verification code sent',
+        message: response.data?.message || 'Verification code sent',
         success: true
       };
     } catch (error: any) {
       console.error('❌ Failed to send OTP:', error);
       
-      // Enhanced error handling for validation errors
+      // Enhanced error handling
       if (error.response?.data?.errors) {
         const validationErrors = error.response.data.errors;
         console.log('🔍 Validation errors:', validationErrors);
         
         let errorMessage = 'Validation failed: ';
         
-        // Check for phoneNumber specific errors
         if (validationErrors.phoneNumber) {
           errorMessage += validationErrors.phoneNumber.join(', ');
         } else if (validationErrors.$) {
-          errorMessage += 'Invalid request format';
+          errorMessage += validationErrors.$.join(', ');
         } else {
           errorMessage += JSON.stringify(validationErrors);
         }
         
         throw new Error(errorMessage);
-      } else if (error.response?.data === 'Phone number is already taken.') {
-        throw new Error('This phone number is already registered. Please use a different number or sign in.');
       } else if (error.response?.data) {
-        throw new Error(typeof error.response.data === 'string' ? error.response.data : JSON.stringify(error.response.data));
+        const errorData = error.response.data;
+        if (typeof errorData === 'string') {
+          throw new Error(errorData);
+        } else if (errorData.message) {
+          throw new Error(errorData.message);
+        } else {
+          throw new Error('Failed to send verification code');
+        }
       } else {
         throw new Error('Failed to send verification code. Please try again.');
       }
     }
   },
 
-  // Verify OTP code - expects JSON OBJECT (this is correct)
+  // Verify OTP code - Also needs formatting
   verifyOTP: async (phoneNumber: string, code: string): Promise<VerifySMSResponse> => {
     try {
       console.log('🔍 Verifying OTP:', { phoneNumber, code });
       
-      // Format phone number for API
+      // Format phone number for API - convert to xxx-xxx-xxxx format
       const formattedPhoneNumber = formatPhoneNumberForSMSAPI(phoneNumber);
       
-      // Verify endpoint expects JSON object with phoneNumber and code fields
-      const requestData: VerifySMSRequest = {
-        phoneNumber: formattedPhoneNumber,
-        code
+      // For verification, send as proper JSON object with formatted phone
+      const requestData = {
+        phoneNumber: formattedPhoneNumber, // Should be "318-534-3522"
+        otp: code
       };
 
+      console.log('🚀 API Request: POST /Account/verify-phonenumber-otp');
       console.log('📤 Verify Request Data (JSON object):', requestData);
 
       const response = await apiClient.post<VerifySMSResponse>(
-        '/SMS/verify',
+        '/Account/verify-phonenumber-otp',
         requestData,
         {
           headers: {
@@ -284,9 +287,9 @@ export const smsAPI = {
         }
       );
       
-      console.log('✅ OTP verified successfully');
+      console.log('✅ OTP verified successfully:', response.data);
       return {
-        message: 'Phone number verified',
+        message: response.data?.message || 'Phone number verified',
         success: true,
         verified: true
       };
@@ -299,15 +302,22 @@ export const smsAPI = {
         
         if (validationErrors.phoneNumber) {
           errorMessage += validationErrors.phoneNumber.join(', ');
-        } else if (validationErrors.code) {
-          errorMessage += validationErrors.code.join(', ');
+        } else if (validationErrors.otp) {
+          errorMessage += validationErrors.otp.join(', ');
         } else {
           errorMessage += JSON.stringify(validationErrors);
         }
         
         throw new Error(errorMessage);
       } else if (error.response?.data) {
-        throw new Error(typeof error.response.data === 'string' ? error.response.data : JSON.stringify(error.response.data));
+        const errorData = error.response.data;
+        if (typeof errorData === 'string') {
+          throw new Error(errorData);
+        } else if (errorData.message) {
+          throw new Error(errorData.message);
+        } else {
+          throw new Error('Invalid verification code');
+        }
       } else {
         throw new Error('Invalid verification code. Please try again.');
       }
@@ -315,7 +325,7 @@ export const smsAPI = {
   },
 };
 
-// SIMPLIFIED phone number formatting
+// Phone number formatting - Convert to xxx-xxx-xxxx format
 const formatPhoneNumberForSMSAPI = (phoneNumber: string): string => {
   if (!phoneNumber) return phoneNumber;
   
@@ -323,10 +333,6 @@ const formatPhoneNumberForSMSAPI = (phoneNumber: string): string => {
   let cleaned = phoneNumber.replace(/\D/g, '');
   
   console.log('🔧 Cleaning phone number:', { original: phoneNumber, cleaned });
-  
-  // Based on API docs, it accepts "3029248522" directly
-  // So we just need to ensure it's digits only
-  // Remove leading country codes if present
   
   // Handle Pakistan numbers - remove country code if present
   if (cleaned.startsWith('92') && cleaned.length === 12) {
@@ -337,6 +343,14 @@ const formatPhoneNumberForSMSAPI = (phoneNumber: string): string => {
     cleaned = cleaned.substring(1);
   }
   
-  console.log('✅ Final phone number format:', cleaned);
-  return cleaned;
+  // Final validation - must be exactly 10 digits
+  if (cleaned.length !== 10) {
+    throw new Error('Phone number must be exactly 10 digits after formatting');
+  }
+  
+  // Convert to xxx-xxx-xxxx format
+  const formatted = `${cleaned.substring(0, 3)}-${cleaned.substring(3, 6)}-${cleaned.substring(6)}`;
+  
+  console.log('✅ Final phone number format (xxx-xxx-xxxx):', formatted);
+  return formatted;
 };

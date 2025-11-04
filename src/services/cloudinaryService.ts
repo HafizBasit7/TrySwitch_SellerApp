@@ -13,19 +13,46 @@ export interface CloudinaryUploadResponse {
 }
 
 class CloudinaryService {
-  private cloudName = Config.CLOUDINARY_CLOUD_NAME;
-  private apiKey = Config.CLOUDINARY_API_KEY;
-  private imageUploadPreset = Config.CLOUDINARY_IMAGE_UPLOAD_PRESET;
-  private videoUploadPreset = Config.CLOUDINARY_VIDEO_UPLOAD_PRESET;
+  private cloudName: string;
+  private apiKey: string;
+  private imageUploadPreset: string;
+  private videoUploadPreset: string;
 
   constructor() {
-    console.log('Cloudinary Config:', {
-      cloudName: this.cloudName,
-      apiKey: this.apiKey ? '***' + this.apiKey.slice(-4) : 'missing', // Log only last 4 chars for security
-      imageUploadPreset: this.imageUploadPreset,
-      videoUploadPreset: this.videoUploadPreset
-    });
+    // Get from environment variables - these will be undefined in production
+    // if not set, and that's OK - we'll handle it gracefully
+    this.cloudName = Config.CLOUDINARY_CLOUD_NAME || '';
+    this.apiKey = Config.CLOUDINARY_API_KEY || '';
+    this.imageUploadPreset = Config.CLOUDINARY_IMAGE_UPLOAD_PRESET || '';
+    this.videoUploadPreset = Config.CLOUDINARY_VIDEO_UPLOAD_PRESET || '';
+
+    this.validateConfig();
   }
+
+  private validateConfig(): void {
+    const missingConfigs: string[] = [];
+    
+    if (!this.cloudName) missingConfigs.push('CLOUDINARY_CLOUD_NAME');
+    if (!this.apiKey) missingConfigs.push('CLOUDINARY_API_KEY');
+    if (!this.imageUploadPreset) missingConfigs.push('CLOUDINARY_IMAGE_UPLOAD_PRESET');
+    if (!this.videoUploadPreset) missingConfigs.push('CLOUDINARY_VIDEO_UPLOAD_PRESET');
+
+    if (missingConfigs.length > 0) {
+      console.warn('⚠️ Cloudinary configuration missing:', missingConfigs);
+      // Don't throw error here - let it fail gracefully during upload
+    } else {
+      console.log('✅ Cloudinary Config Loaded');
+    }
+  }
+
+  private checkConfig(): void {
+    if (!this.cloudName || !this.apiKey) {
+      throw new Error(
+        'Cloudinary configuration missing. Please check your environment variables.'
+      );
+    }
+  }
+  
   async uploadImage(base64Image: string): Promise<string> {
     try {
       const base64Data = base64Image.includes('base64,') 

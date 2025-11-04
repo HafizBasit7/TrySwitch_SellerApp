@@ -9,7 +9,6 @@ import {
     StatusBar,
     Image,
     Platform,
-    Linking,
     Dimensions,
     Modal,
 } from 'react-native';
@@ -17,6 +16,7 @@ import Video from 'react-native-video';
 import Toast from 'react-native-toast-message';
 import { propertyListingsAPI } from '../../api/propertyListingsAPI';
 import { CreatePropertyListingRequest } from '../../types/propertyTypes';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface MediaItem {
     url: string;
@@ -35,6 +35,9 @@ interface PreviewListingScreenProps {
                 documentItems: string[];
                 imageCount: number;
                 videoCount: number;
+                isEdit?: boolean;
+                listingId?: number;
+                originalListing?: any;
             };
         };
     };
@@ -45,13 +48,16 @@ const MEDIA_HEIGHT = 300;
 
 const PreviewListingScreen: React.FC<PreviewListingScreenProps> = ({ navigation, route }) => {
     const { listingData } = route.params;
-    const { formData, mediaItems, documentItems, imageCount, videoCount } = listingData;
-    
+    const { formData, mediaItems, documentItems, imageCount, videoCount, isEdit, listingId } = listingData;
+
     const [loading, setLoading] = useState(false);
     const [playingVideo, setPlayingVideo] = useState<string | null>(null);
     const [videoPaused, setVideoPaused] = useState(true);
+    const [inlineVideoPaused, setInlineVideoPaused] = useState<{ [key: number]: boolean }>({});
+    const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
     const videoRef = useRef<Video>(null);
-
+    const fullScreenVideoRef = useRef<Video>(null);
+    const insets = useSafeAreaInsets();
     const formatPrice = (price: string | number) => {
         const priceNum = typeof price === 'string' ? parseFloat(price) : price;
         return `$${priceNum?.toLocaleString() || '0'}`;
@@ -63,11 +69,61 @@ const PreviewListingScreen: React.FC<PreviewListingScreenProps> = ({ navigation,
         return (price / sqFt).toFixed(2);
     };
 
+    // Generate video thumbnail URL
+    const getVideoThumbnail = (videoUrl: string): string => {
+        if (!videoUrl) return '';
+
+        if (videoUrl.includes('cloudinary.com') && videoUrl.includes('/video/')) {
+            return videoUrl
+                .replace('/video/upload/', '/image/upload/')
+                .replace('.mp4', '.jpg')
+                .replace('.mov', '.jpg')
+                .replace('.avi', '.jpg');
+        }
+
+        return '';
+    };
+
+    // Toggle inline video play/pause
+    const handleToggleInlineVideo = (index: number) => {
+        setInlineVideoPaused(prev => ({
+            ...prev,
+            [index]: !prev[index]
+        }));
+    };
+
+    // Open full screen video
+    const handleOpenFullScreen = (videoUrl: string, index: number) => {
+        setPlayingVideo(videoUrl);
+        // Pause inline video when opening fullscreen
+        setInlineVideoPaused(prev => ({
+            ...prev,
+            [index]: true
+        }));
+        setVideoPaused(false);
+    };
+
+    const handleCloseVideo = () => {
+        setPlayingVideo(null);
+        setVideoPaused(true);
+    };
+
+    const handleVideoError = (error: any) => {
+        console.error('Video playback error:', error);
+        Toast.show({
+            type: 'error',
+            text1: 'Video Error',
+            text2: 'Failed to play video. Please try again.',
+            position: 'bottom',
+            bottomOffset: insets.bottom + 80,
+        });
+        handleCloseVideo();
+    };
+
     const handlePublishListing = async () => {
         try {
             setLoading(true);
 
-            // Prepare the request data
             const requestData: CreatePropertyListingRequest = {
                 SiteOrPropertyImages: mediaItems.map(item => item.url),
                 PropertyAddress: formData.propertyAddress,
@@ -88,7 +144,7 @@ const PreviewListingScreen: React.FC<PreviewListingScreenProps> = ({ navigation,
                 VideoCount: videoCount,
             };
 
-            // Add optional fields if provided
+
             if (formData.rehabEstimate) {
                 requestData.RehabEstimate = parseFloat(formData.rehabEstimate);
             }
@@ -96,38 +152,55 @@ const PreviewListingScreen: React.FC<PreviewListingScreenProps> = ({ navigation,
                 requestData.AverageLeasePrice = parseFloat(formData.averageLeasePrice);
             }
 
-            console.log('🚀 Publishing listing with data:', requestData);
+            console.log('🚀 Processing listing with data:', requestData);
+            console.log('📝 Mode:', isEdit ? 'EDIT' : 'CREATE');
+            if (isEdit) {
+                console.log('🔄 Listing ID to update:', listingId);
+            }
 
-            const result = await propertyListingsAPI.createPropertyListing(requestData);
+            let result;
+            let successMessage;
+
+            if (isEdit && listingId) {
+                console.log('🔄 Updating existing listing:', listingId);
+                result = await propertyListingsAPI.updatePropertyListing(listingId, requestData);
+                successMessage = 'Listing updated successfully!';
+            } else {
+                console.log('🆕 Creating new listing');
+                result = await propertyListingsAPI.createPropertyListing(requestData);
+                successMessage = 'Listing published successfully!';
+            }
 
             Toast.show({
                 type: 'success',
                 text1: 'Success',
-                text2: 'Listing published successfully!',
-                position: 'top',
+                text2: successMessage,
+                position: 'bottom',
                 visibilityTime: 2000,
+                bottomOffset: insets.bottom + 40,
                 onHide: () => navigation.navigate('ListingMain'),
             });
 
         } catch (error: any) {
-            console.error('💥 Error publishing listing:', error);
-            
+            console.error('💥 Error processing listing:', error);
+
             if (error.response?.status === 500) {
                 const errorMessage = error.response?.data;
                 if (errorMessage?.includes('already exists')) {
                     Toast.show({
                         type: 'error',
                         text1: 'Address Already Exists',
-                        text2: 'This property is already in use. Please use a different.',
-                        position: 'top',
+                        text2: 'This property is already in use. Please use a different address.',
+                        position: 'bottom',
                         visibilityTime: 4000,
                     });
                 } else {
+                    const action = isEdit ? 'updating' : 'publishing';
                     Toast.show({
                         type: 'error',
                         text1: 'Server Error',
-                        text2: 'There was an issue publishing the listing.',
-                        position: 'top',
+                        text2: `There was an issue ${action} the listing.`,
+                        position: 'bottom',
                     });
                 }
             } else if (error.response?.status === 400) {
@@ -135,47 +208,27 @@ const PreviewListingScreen: React.FC<PreviewListingScreenProps> = ({ navigation,
                     type: 'error',
                     text1: 'Validation Error',
                     text2: 'Please check all required fields.',
-                    position: 'top',
+                    position: 'bottom',
                 });
             } else if (error.message?.includes('Network Error')) {
                 Toast.show({
                     type: 'error',
                     text1: 'Network Error',
                     text2: 'Please check your internet connection.',
-                    position: 'top',
+                    position: 'bottom',
                 });
             } else {
+                const action = isEdit ? 'update' : 'publish';
                 Toast.show({
                     type: 'error',
                     text1: 'Error',
-                    text2: error.message || 'Failed to publish listing.',
-                    position: 'top',
+                    text2: error.message || `Failed to ${action} listing.`,
+                    position: 'bottom',
                 });
             }
         } finally {
             setLoading(false);
         }
-    };
-
-    const handlePlayVideo = (videoUrl: string) => {
-        setPlayingVideo(videoUrl);
-        setVideoPaused(false);
-    };
-
-    const handleCloseVideo = () => {
-        setPlayingVideo(null);
-        setVideoPaused(true);
-    };
-
-    const handleVideoError = (error: any) => {
-        console.error('Video playback error:', error);
-        Toast.show({
-            type: 'error',
-            text1: 'Video Error',
-            text2: 'Failed to play video. Please try again.',
-            position: 'top',
-        });
-        handleCloseVideo();
     };
 
     const renderFullScreenVideo = () => {
@@ -192,18 +245,35 @@ const PreviewListingScreen: React.FC<PreviewListingScreenProps> = ({ navigation,
                     <TouchableOpacity style={styles.closeButton} onPress={handleCloseVideo}>
                         <Text style={styles.closeButtonText}>✕</Text>
                     </TouchableOpacity>
-                    
+
                     <Video
-                        ref={videoRef}
+                        ref={fullScreenVideoRef}
                         source={{ uri: playingVideo }}
                         style={styles.fullScreenVideoPlayer}
                         resizeMode="contain"
                         paused={videoPaused}
-                        controls={true}
+                        controls={false}
+                        poster={getVideoThumbnail(playingVideo)}
+                        posterResizeMode="contain"
                         onError={handleVideoError}
-                        onEnd={handleCloseVideo}
+                        onEnd={() => setVideoPaused(true)}
                         ignoreSilentSwitch="obey"
+                        playInBackground={false}
+                        playWhenInactive={false}
                     />
+
+                    {/* Custom Play/Pause Button for Fullscreen */}
+                    <TouchableOpacity
+                        style={styles.fullScreenPlayPauseButton}
+                        onPress={() => setVideoPaused(!videoPaused)}
+                        activeOpacity={0.7}
+                    >
+                        <View style={styles.fullScreenPlayPauseCircle}>
+                            <Text style={styles.fullScreenPlayPauseIcon}>
+                                {videoPaused ? '▶' : '❚❚'}
+                            </Text>
+                        </View>
+                    </TouchableOpacity>
                 </View>
             </Modal>
         );
@@ -219,12 +289,27 @@ const PreviewListingScreen: React.FC<PreviewListingScreenProps> = ({ navigation,
         }
 
         return (
-            <ScrollView 
-                horizontal 
+            <ScrollView
+                horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.mediaScrollView}
                 contentContainerStyle={styles.mediaContentContainer}
                 pagingEnabled
+                onScroll={(event) => {
+                    const slideIndex = Math.round(
+                        event.nativeEvent.contentOffset.x / screenWidth
+                    );
+                    setCurrentMediaIndex(slideIndex);
+                    // Pause all videos when scrolling
+                    setInlineVideoPaused(prev => {
+                        const newState = { ...prev };
+                        Object.keys(newState).forEach(key => {
+                            newState[parseInt(key)] = true;
+                        });
+                        return newState;
+                    });
+                }}
+                scrollEventThrottle={16}
             >
                 {mediaItems.map((item, index) => (
                     <View key={index} style={styles.mediaItemContainer}>
@@ -236,20 +321,48 @@ const PreviewListingScreen: React.FC<PreviewListingScreenProps> = ({ navigation,
                             />
                         ) : (
                             <View style={styles.videoContainer}>
-                                {/* Video thumbnail with play button */}
-                                <Image
-                                    source={{ 
-                                        uri: item.url.replace('/video/', '/image/').replace('.mp4', '.jpg') 
-                                    }}
-                                    style={styles.mediaImage}
+                                {/* Video Player - Always rendered with poster */}
+                                <Video
+                                    source={{ uri: item.url }}
+                                    style={styles.videoPlayer}
                                     resizeMode="cover"
+                                    paused={inlineVideoPaused[index] !== false}
+                                    controls={false}
+                                    poster={getVideoThumbnail(item.url)}
+                                    posterResizeMode="cover"
+                                    repeat={false}
+                                    muted={false}
+                                    onError={handleVideoError}
+                                    ignoreSilentSwitch="obey"
+                                    playInBackground={false}
+                                    playWhenInactive={false}
                                 />
-                                <TouchableOpacity 
-                                    style={styles.playButton}
-                                    onPress={() => handlePlayVideo(item.url)}
+
+                                {/* Center Play/Pause Button */}
+                                <TouchableOpacity
+                                    style={styles.centerPlayPauseButton}
+                                    onPress={() => handleToggleInlineVideo(index)}
+                                    activeOpacity={0.7}
                                 >
-                                    <Text style={styles.playButtonIcon}>▶</Text>
+                                    <View style={styles.playPauseCircle}>
+                                        <Text style={styles.playPauseIcon}>
+                                            {inlineVideoPaused[index] !== false ? '▶' : '❚❚'}
+                                        </Text>
+                                    </View>
                                 </TouchableOpacity>
+
+                                {/* Fullscreen Button - Only show when video is playing */}
+                                {inlineVideoPaused[index] === false && (
+                                    <TouchableOpacity
+                                        style={styles.fullScreenButton}
+                                        onPress={() => handleOpenFullScreen(item.url, index)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={styles.fullScreenButtonIcon}>⛶</Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                {/* Video Badge */}
                                 <View style={styles.videoBadge}>
                                     <Text style={styles.videoBadgeText}>VIDEO</Text>
                                 </View>
@@ -263,17 +376,17 @@ const PreviewListingScreen: React.FC<PreviewListingScreenProps> = ({ navigation,
 
     return (
         <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+            <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
             {/* Full Screen Video Player Modal */}
             {renderFullScreenVideo()}
 
-            <ScrollView 
+            <ScrollView
                 style={styles.scrollView}
                 contentContainerStyle={styles.contentContainer}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Property Media - Now Scrollable */}
+                {/* Property Media - Scrollable */}
                 <View style={styles.imageSection}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                         <Image
@@ -282,22 +395,20 @@ const PreviewListingScreen: React.FC<PreviewListingScreenProps> = ({ navigation,
                         />
                     </TouchableOpacity>
                     {renderMediaPreview()}
-                 
+
                     <View style={styles.imageCountBadge}>
                         <Text style={styles.imageCountText}>
-                            📷 {imageCount} {videoCount > 0 ? `🎥 ${videoCount}` : ''}
+                            {currentMediaIndex + 1} of {mediaItems.length}
                         </Text>
                     </View>
                 </View>
 
                 {/* Address and Price Section */}
                 <Text style={styles.addressText}>{formData.propertyAddress}</Text>
-                    
+
                 <View style={styles.addressSection}>
-                    {/* Price + Stats Row */}
                     <View style={styles.priceStatsRow}>
-                        <Text style={styles.priceText}>{formatPrice(formData.price)}</Text>                    
-                        {/* Property Stats */}
+                        <Text style={styles.priceText}>{formatPrice(formData.price)}</Text>
                         <View style={styles.statsContainer}>
                             <View style={styles.statItem}>
                                 <Text style={styles.statValue}>{formData.bedrooms}</Text>
@@ -328,58 +439,133 @@ const PreviewListingScreen: React.FC<PreviewListingScreenProps> = ({ navigation,
                     <View style={styles.tabDivider} />
                     <View style={styles.featuresList}>
                         <View style={styles.featureItem}>
+                             <Image
+                                source={require('../../assets/icons/Type.png')}
+                                style={styles.detailIcon}
+                                resizeMode="contain"
+                            />
                             <Text style={styles.featureLabel}>Type:</Text>
                             <Text style={styles.featureValue}>{formData.propertyType}</Text>
                         </View>
-                        
+
                         <View style={styles.featureItem}>
+                             <Image
+                                source={require('../../assets/icons/Calender.png')}
+                                style={styles.detailIcon}
+                                resizeMode="contain"
+                            />
                             <Text style={styles.featureLabel}>Year Built:</Text>
                             <Text style={styles.featureValue}>{formData.yearBuilt}</Text>
                         </View>
-                        
+
                         <View style={styles.featureItem}>
+                               <Image
+                                source={require('../../assets/icons/Heat.png')}
+                                style={styles.detailIcon}
+                                resizeMode="contain"
+                            />
                             <Text style={styles.featureLabel}>Heating:</Text>
                             <Text style={styles.featureValue}>
                                 {formData.heatingSystems.join(', ')}
                             </Text>
                         </View>
-                        
+
                         <View style={styles.featureItem}>
+                               <Image
+                                source={require('../../assets/icons/Cooling.png')}
+                                style={styles.detailIcon}
+                                resizeMode="contain"
+                            />
                             <Text style={styles.featureLabel}>Cooling:</Text>
                             <Text style={styles.featureValue}>
                                 {formData.coolingSystems.join(', ')}
                             </Text>
                         </View>
-                        
+
                         <View style={styles.featureItem}>
+                               <Image
+                                source={require('../../assets/icons/Park.png')}
+                                style={styles.detailIcon}
+                                resizeMode="contain"
+                            />
                             <Text style={styles.featureLabel}>Parking:</Text>
                             <Text style={styles.featureValue}>
                                 {formData.parking.join(', ')}
                             </Text>
                         </View>
-                        
+
                         <View style={styles.featureItem}>
+                               <Image
+                                source={require('../../assets/icons/Lot.png')}
+                                style={styles.detailIcon}
+                                resizeMode="contain"
+                            />
                             <Text style={styles.featureLabel}>Lot:</Text>
                             <Text style={styles.featureValue}>
                                 {formData.lotSize} {formData.lotUnit}
                             </Text>
                         </View>
-                        
+
                         <View style={styles.featureItem}>
+                               <Image
+                                source={require('../../assets/icons/Price.png')}
+                                style={styles.detailIcon}
+                                resizeMode="contain"
+                            />
                             <Text style={styles.featureLabel}>Price/sqft:</Text>
                             <Text style={styles.featureValue}>
                                 ${calculatePricePerSqFt()}
                             </Text>
                         </View>
-                        
+
                         <View style={styles.featureItem}>
+                            <Image
+                                source={require('../../assets/icons/bed.png')}
+                                style={styles.detailIcon}
+                                resizeMode="contain"
+                            />
                             <Text style={styles.featureLabel}>Bedrooms:</Text>
                             <Text style={styles.featureValue}>{formData.bedrooms}</Text>
                         </View>
-                        
+
                         <View style={styles.featureItem}>
+                               <Image
+                                source={require('../../assets/icons/bath.png')}
+                                style={styles.detailIcon}
+                                resizeMode="contain"
+                            />
                             <Text style={styles.featureLabel}>Bathrooms:</Text>
                             <Text style={styles.featureValue}>{formData.bathrooms}</Text>
+                        </View>
+
+                        <View style={styles.featureItem}>
+                              <Image
+                                source={require('../../assets/icons/checkmark.png')}
+                                style={styles.detailIcon}
+                                resizeMode="contain"
+                            />
+                            <Text style={styles.featureLabel}>Market Value:</Text>
+                            <Text style={styles.featureValue}>{formData.networth}</Text>
+                        </View>
+
+                        <View style={styles.featureItem}>
+                              <Image
+                                source={require('../../assets/icons/listing.png')}
+                                style={styles.detailIcon}
+                                resizeMode="contain"
+                            />
+                            <Text style={styles.featureLabel}>Rehab Estimate:</Text>
+                            <Text style={styles.featureValue}>{formData.rehabEstimate}</Text>
+                        </View>
+
+                        <View style={styles.featureItem}>
+                              <Image
+                                source={require('../../assets/icons/Price.png')}
+                                style={styles.detailIcon}
+                                resizeMode="contain"
+                            />
+                            <Text style={styles.featureLabel}>Avg Lease Price:</Text>
+                            <Text style={styles.featureValue}>{formData.averageLeasePrice}</Text>
                         </View>
                     </View>
                 </View>
@@ -402,27 +588,25 @@ const PreviewListingScreen: React.FC<PreviewListingScreenProps> = ({ navigation,
                     </View>
                 )}
 
-                
-
-                {/* Spacer for the publish button */}
                 <View style={styles.bottomSpacer} />
-                    {/* Publish Listing Button - Fixed positioning */}
-            <View style={styles.publishButtonContainer}>
-                <TouchableOpacity
-                    style={[styles.publishButton, loading && styles.publishButtonDisabled]}
-                    onPress={handlePublishListing}
-                    disabled={loading}
-                >
-                    {loading ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                        <Text style={styles.publishButtonText}>PUBLISH LISTING</Text>
-                    )}
-                </TouchableOpacity>
-            </View>
-            </ScrollView>
 
-        
+                {/* Publish Listing Button */}
+                <View style={styles.publishButtonContainer}>
+                    <TouchableOpacity
+                        style={[styles.publishButton, loading && styles.publishButtonDisabled]}
+                        onPress={handlePublishListing}
+                        disabled={loading}
+                    >
+                        {loading ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                            <Text style={styles.publishButtonText}>
+                                {isEdit ? 'UPDATE LISTING' : 'PUBLISH LISTING'}
+                            </Text>
+                        )}
+                    </TouchableOpacity>
+                </View>
+            </ScrollView>
 
             <Toast />
         </View>
@@ -442,7 +626,7 @@ const styles = StyleSheet.create({
     },
     imageSection: {
         position: 'relative',
-        height: MEDIA_HEIGHT, // Fixed height
+        height: MEDIA_HEIGHT,
         backgroundColor: '#000',
     },
     mediaScrollView: {
@@ -454,6 +638,7 @@ const styles = StyleSheet.create({
     mediaItemContainer: {
         width: screenWidth,
         height: MEDIA_HEIGHT,
+        backgroundColor: '#000',
     },
     mediaImage: {
         width: '100%',
@@ -465,42 +650,73 @@ const styles = StyleSheet.create({
         height: '100%',
         backgroundColor: '#000',
     },
-    playButton: {
+    videoPlayer: {
+        width: '100%',
+        height: '100%',
+        backgroundColor: 'transparent',
+    },
+    // Center Play/Pause Button (Inline)
+    centerPlayPauseButton: {
         position: 'absolute',
         top: '50%',
         left: '50%',
-        transform: [{ translateX: -25 }, { translateY: -25 }],
-        width: 50,
-        height: 50,
+        transform: [{ translateX: -35 }, { translateY: -35 }],
+        zIndex: 10,
+    },
+    playPauseCircle: {
+        width: 70,
+        height: 70,
+        borderRadius: 35,
         backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        borderRadius: 30,
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 2,
-        borderColor: '#fff',
+        borderWidth: 3,
+        borderColor: 'rgba(255, 255, 255, 0.9)',
     },
-    playButtonIcon: {
+    playPauseIcon: {
         color: '#fff',
-        fontSize: 20,
+        fontSize: 24,
         fontWeight: 'bold',
-        marginLeft: 4,
+        marginLeft: 3,
+    },
+    // Fullscreen Button
+    fullScreenButton: {
+        position: 'absolute',
+        top: 16,
+        right: 16,
+        width: 44,
+        height: 44,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10,
+        borderWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.5)',
+    },
+    fullScreenButtonIcon: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: 'bold',
     },
     videoBadge: {
         position: 'absolute',
-        top: 24,
+        bottom: 16,
         right: 16,
         backgroundColor: 'rgba(0, 0, 0, 0.8)',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 6,
         borderWidth: 1,
-        borderColor: '#fff',
+        borderColor: 'rgba(255, 255, 255, 0.5)',
+        zIndex: 10,
     },
     videoBadgeText: {
         color: '#fff',
         fontSize: 12,
         fontWeight: 'bold',
     },
+    // Full Screen Video Styles
     fullScreenVideo: {
         flex: 1,
         backgroundColor: '#000',
@@ -515,18 +731,44 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: Platform.OS === 'ios' ? 60 : 40,
         right: 20,
-        width: 40,
-        height: 40,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        borderRadius: 20,
+        width: 44,
+        height: 44,
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 1001,
+        borderWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.5)',
     },
     closeButtonText: {
         color: '#fff',
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: 'bold',
+    },
+    // Full Screen Play/Pause Button
+    fullScreenPlayPauseButton: {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: [{ translateX: -40 }, { translateY: -40 }],
+        zIndex: 1000,
+    },
+    fullScreenPlayPauseCircle: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 3,
+        borderColor: 'rgba(255, 255, 255, 0.9)',
+    },
+    fullScreenPlayPauseIcon: {
+        color: '#fff',
+        fontSize: 28,
+        fontWeight: 'bold',
+        marginLeft: 3,
     },
     placeholderImage: {
         width: '100%',
@@ -542,18 +784,17 @@ const styles = StyleSheet.create({
     imageCountBadge: {
         position: 'absolute',
         bottom: 10,
-        left: '50%',
-        transform: [{ translateX: -50 }],
-        backgroundColor: '#9CA3AF',
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 20,
         justifyContent: 'center',
         alignItems: 'center',
+        alignSelf: "center"
     },
     imageCountText: {
         color: '#fff',
-        fontSize: 14,
+        fontSize: 12,
         fontWeight: '600',
     },
     backButton: {
@@ -566,7 +807,7 @@ const styles = StyleSheet.create({
         zIndex: 10,
         justifyContent: 'center',
         alignItems: 'center',
-        borderColor: "#fff",
+        borderColor: '#fff',
         borderWidth: 1,
         borderRadius: 6,
     },
@@ -592,7 +833,7 @@ const styles = StyleSheet.create({
         color: '#1f2937',
         marginBottom: 8,
         textAlign: 'center',
-        marginTop: 10
+        marginTop: 10,
     },
     priceStatsRow: {
         flexDirection: 'row',
@@ -655,6 +896,12 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#374151',
         flex: 1,
+        left: 10
+    },
+    detailIcon: {
+        width: 16,
+        height: 16,
+        tintColor: '#1347a8ff',
     },
     featureValue: {
         fontSize: 12,
@@ -698,7 +945,7 @@ const styles = StyleSheet.create({
         shadowRadius: 3,
     },
     publishButton: {
-        backgroundColor: '#f97316',
+        backgroundColor: '#FF4500',
         borderRadius: 12,
         paddingVertical: 16,
         alignItems: 'center',

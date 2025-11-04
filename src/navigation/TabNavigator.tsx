@@ -1,13 +1,12 @@
-// src/navigation/TabNavigator.tsx
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Image, StyleSheet, View, ImageBackground, Text } from 'react-native';
+import { Image, StyleSheet, View, ImageBackground, Text, Keyboard } from 'react-native';
 import { BottomTabParamList } from './types';
 import ListingStackNavigator from './ListingStackNavigator';
 import ProfileStackNavigator from './ProfileStackNavigator';
-import FollowersScreen from '../screens/Followers/FollowersScreen';
-import ChatsScreen from '../screens/Chat/ChatsScreen';
-import MyTasksScreen from '../screens/Tasks/MyTasksScreen';
+import TasksStackNavigator from './TasksStackNavigator';
+import ChatsStackNavigator from './ChatStackNavigator';
+import FollowersStackNavigator from './FollowersStackNavigator';
 
 const Tab = createBottomTabNavigator<BottomTabParamList>();
 
@@ -19,14 +18,16 @@ interface TabIconProps {
 
 const TabIcon: React.FC<TabIconProps> = ({ focused, iconSource, label }) => (
   <View style={styles.tabItem}>
-    <Image 
+    <Image
       source={iconSource}
       style={[styles.tabIcon, { tintColor: focused ? '#fff' : 'rgba(255, 255, 255, 0.6)' }]}
     />
-    <Text style={[
-      styles.tabLabel, 
-      { color: focused ? '#fff' : 'rgba(255, 255, 255, 0.6)' }
-    ]}>
+    <Text
+      style={[
+        styles.tabLabel,
+        { color: focused ? '#fff' : 'rgba(255, 255, 255, 0.6)' },
+      ]}
+    >
       {label}
     </Text>
     {focused && <View style={styles.activeTabIndicator} />}
@@ -34,6 +35,18 @@ const TabIcon: React.FC<TabIconProps> = ({ focused, iconSource, label }) => (
 );
 
 const TabNavigator: React.FC = () => {
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showListener = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hideListener = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, []);
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -46,7 +59,7 @@ const TabNavigator: React.FC = () => {
           backgroundColor: 'transparent',
           borderTopWidth: 0,
           elevation: 0,
-          height: 70,
+          height: isKeyboardVisible ? 0 : 70, // 👈 Hide when keyboard open
         },
         tabBarBackground: () => (
           <ImageBackground
@@ -58,25 +71,25 @@ const TabNavigator: React.FC = () => {
         tabBarShowLabel: false,
       }}
     >
-   <Tab.Screen 
-  name="Listing" 
-  component={ListingStackNavigator}
-  options={{
-    tabBarIcon: ({ focused }) => (
-      <TabIcon 
-        focused={focused}
-        iconSource={require('../assets/icons/listing.png')}
-        label="Listing"
-      />
-    ),
-  }}
-/>
-      <Tab.Screen 
-        name="Followers" 
-        component={FollowersScreen}
+      <Tab.Screen
+        name="Listing"
+        component={ListingStackNavigator}
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon 
+            <TabIcon
+              focused={focused}
+              iconSource={require('../assets/icons/listing.png')}
+              label="Listing"
+            />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Followers"
+        component={FollowersStackNavigator}
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <TabIcon
               focused={focused}
               iconSource={require('../assets/icons/followers.png')}
               label="Followers"
@@ -84,12 +97,12 @@ const TabNavigator: React.FC = () => {
           ),
         }}
       />
-      <Tab.Screen 
-        name="Chats" 
-        component={ChatsScreen}
+      <Tab.Screen
+        name="Chats"
+        component={ChatsStackNavigator}
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon 
+            <TabIcon
               focused={focused}
               iconSource={require('../assets/icons/chat.png')}
               label="Chats"
@@ -97,12 +110,12 @@ const TabNavigator: React.FC = () => {
           ),
         }}
       />
-      <Tab.Screen 
-        name="MyTasks" 
-        component={MyTasksScreen}
+      <Tab.Screen
+        name="MyTasks"
+        component={TasksStackNavigator}
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon 
+            <TabIcon
               focused={focused}
               iconSource={require('../assets/icons/tasks.png')}
               label="My Tasks"
@@ -110,12 +123,12 @@ const TabNavigator: React.FC = () => {
           ),
         }}
       />
-      <Tab.Screen 
-        name="Profile" 
+      <Tab.Screen
+        name="Profile"
         component={ProfileStackNavigator}
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon 
+            <TabIcon
               focused={focused}
               iconSource={require('../assets/icons/profile.png')}
               label="Profile"
