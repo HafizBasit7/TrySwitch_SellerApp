@@ -313,7 +313,7 @@ const ProfileScreen: React.FC = () => {
         </View>
    
         {/* Social Media Links - Only show if any exist */}
-        {(hasRealData(sellerProfile?.facebook) ||
+        {/* {(hasRealData(sellerProfile?.facebook) ||
           hasRealData(sellerProfile?.twitter) ||
           hasRealData(sellerProfile?.linkedIn) ||
           hasRealData(sellerProfile?.youtube) ||
@@ -326,13 +326,13 @@ const ProfileScreen: React.FC = () => {
                     style={styles.socialMediaButton}
                     onPress={() => handleSocialLink(sellerProfile!.facebook)}
                   >
-                    {/* <Text style={styles.socialMediaIcon}>📘</Text> */}
+                    
                     <Image
                       source={require('../../assets/icons/facebook.png')}
                       style={styles.socialMediaIcon}
                       resizeMode="contain"
                     />
-                    {/* <Text style={styles.socialMediaText}>Facebook</Text> */}
+                   
                   </TouchableOpacity>
                 )}
 
@@ -384,39 +384,30 @@ const ProfileScreen: React.FC = () => {
                     style={styles.socialMediaButton}
                     onPress={() => handleSocialLink(sellerProfile!.instagram)}
                   >
-                    {/* <Text style={styles.socialMediaIcon}>📷</Text> */}
+                 
                     <Image 
                     source={require('../../assets/icons/instagram.png')}
                     style={styles.socialMediaIcon}
                     />
-                    {/* <Text style={styles.socialMediaText}>Instagram</Text> */}
+                 
                   </TouchableOpacity>
                 )}
               </View>
             </View>
         
-          )}
+          )} */}
 
         {/* Location - Only show if not empty */}
-
+{/* 
           <View style={styles.fieldWrapper}>
             <Text style={styles.fieldLabelOrange}>Location</Text>
             <View style={styles.fieldContentBox}>
               <Text style={styles.fieldText}>{sellerProfile!.geographicalAreas}</Text>
             </View>
-          </View>
+          </View> */}
      
 
-        {/* Serving States - Only show if not empty */}
-
-          <View style={styles.fieldWrapper}>
-            <Text style={styles.fieldLabelBlue}>Serving States</Text>
-            <View style={styles.fieldContentBox}>
-              <Text style={styles.fieldText}>
-                {formatArrayData(sellerProfile!.servingStates)}
-              </Text>
-            </View>
-          </View>
+      
 
 
         <TouchableOpacity
@@ -562,6 +553,17 @@ const ProfileScreen: React.FC = () => {
             <Text style={styles.fieldLabelOrange}>Real Estate ID</Text>
             <View style={styles.fieldContentBox}>
               <Text style={styles.fieldText}>{sellerProfile!.realStateIdNo}</Text>
+            </View>
+          </View>
+
+            {/* Serving States - Only show if not empty */}
+
+          <View style={styles.fieldWrapper}>
+            <Text style={styles.fieldLabelBlue}>Serving States</Text>
+            <View style={styles.fieldContentBox}>
+              <Text style={styles.fieldText}>
+                {formatArrayData(sellerProfile!.servingStates)}
+              </Text>
             </View>
           </View>
     

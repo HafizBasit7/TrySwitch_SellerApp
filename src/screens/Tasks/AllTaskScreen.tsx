@@ -766,12 +766,12 @@ const AllTasksScreen = () => {
           <Text style={styles.emptySubText}>
             {getEmptyText()}
           </Text>
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={styles.refreshButton}
             onPress={fetchTasks}
           >
             <Text style={styles.refreshButtonText}>Refresh</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       ) : (
         <FlatList

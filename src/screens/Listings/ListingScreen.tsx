@@ -11,9 +11,13 @@ import {
   RefreshControl,
   StatusBar,
   ImageBackground,
+  Modal, // Add Modal import
+  Alert, // Add Alert import
 } from 'react-native';
 import { propertyListingsAPI } from '../../api/propertyListingsAPI';
 import { PropertyListing } from '../../types/propertyTypes';
+import { useAuth } from '../../context/AuthContext'; // Import your auth context
+import { profileAPI } from '../../api/profileAPI'; // Import profile API to check
 
 interface ListingsScreenProps {
   navigation: any;
@@ -26,10 +30,81 @@ const ListingsScreen: React.FC<ListingsScreenProps> = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [pageNumber, setPageNumber] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [isVerificationModalVisible, setIsVerificationModalVisible] = useState(false);
+  const [isPhoneVerified, setIsPhoneVerified] = useState(false);
+  const [checkingVerification, setCheckingVerification] = useState(false);
+
+  const { userInfo } = useAuth(); // Get user info from auth context
 
   useEffect(() => {
     fetchListings();
+    checkPhoneVerificationStatus();
   }, []);
+
+const checkPhoneVerificationStatus = async () => {
+  try {
+    setCheckingVerification(true);
+    const response = await profileAPI.getSellerProfile();
+    
+    const profile = response.sellerProfile;
+    
+    console.log('📱 Comprehensive Phone Verification Check:', {
+      hasProfile: !!profile,
+      phoneNumber: profile?.phoneNumber,
+      emailAndPhoneVerified: profile?.emailandPhoneVerified,
+      profileStatus: profile?.profileStatus,
+      hasValidPhone: !!profile?.phoneNumber && profile.phoneNumber !== 'null' && profile.phoneNumber.length >= 10
+    });
+
+    // Multiple conditions for verification
+    const isVerified = 
+      profile && 
+      profile.phoneNumber && 
+      profile.phoneNumber !== 'null' && 
+      profile.phoneNumber.length >= 10 && // Valid phone number
+      profile.emailandPhoneVerified === true; // Explicitly verified
+    
+    console.log('✅ Final verification status:', isVerified);
+    setIsPhoneVerified(isVerified);
+    
+  } catch (error: any) {
+    console.error('❌ Error checking phone verification:', error);
+    
+    // Handle specific error cases
+    if (error.response?.status === 404) {
+      console.log('👤 No seller profile found');
+    } else if (error.response?.data?.details === 'This profile is deleted.') {
+      console.log('🗑️ Profile is deleted');
+    }
+    
+    setIsPhoneVerified(false);
+  } finally {
+    setCheckingVerification(false);
+  }
+};
+
+   const handleCreateListingPress = async () => {
+    // If we're still checking verification status, wait
+    if (checkingVerification) {
+      Alert.alert('Please wait', 'Checking your verification status...');
+      return;
+    }
+
+    // If phone is not verified, show modal
+    if (!isPhoneVerified) {
+      setIsVerificationModalVisible(true);
+      return;
+    }
+
+    // If phone is verified, navigate to create listing
+    navigation.navigate('CreateListing');
+  };
+
+  // Function to handle "Let's Go" button in modal
+  const handleNavigateToProfile = () => {
+    setIsVerificationModalVisible(false);
+    navigation.navigate('Profile'); // Navigate to profile screen to verify phone
+  };
 
   const fetchListings = async (page = 1, refresh = false) => {
     if (loading || (!hasMore && !refresh)) return;
@@ -334,6 +409,43 @@ const ListingsScreen: React.FC<ListingsScreenProps> = ({ navigation }) => {
     </View>
   );
 
+  const renderVerificationModal = () => (
+    <Modal
+      visible={isVerificationModalVisible}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setIsVerificationModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.verificationModalContent}>
+         <TouchableOpacity
+        style={styles.crossButton}
+        onPress={() => setIsVerificationModalVisible(false)}
+      >
+        <Text style={styles.crossText}>✕</Text>
+      </TouchableOpacity>
+          
+          {/* <Text style={styles.modalTitle}>Verify Your Phone Number</Text> */}
+          
+          <Text style={styles.modalMessage}>
+            To create a listing, please verify your email address and phone number
+          </Text>
+
+          <View style={styles.modalButtonsContainer}>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.primaryButton]}
+              onPress={handleNavigateToProfile}
+            >
+              <Text style={styles.primaryButtonText}>Let's Go</Text>
+            </TouchableOpacity>
+            
+        
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
@@ -400,17 +512,26 @@ const ListingsScreen: React.FC<ListingsScreenProps> = ({ navigation }) => {
       >
         <TouchableOpacity
           style={styles.createButton}
-          onPress={() => navigation.navigate('CreateListing')}
+          onPress={handleCreateListingPress}
           activeOpacity={0.8}
+          disabled={checkingVerification}
         >
+            {checkingVerification ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
           <Image
             source={require('../../assets/icons/plus.png')}
             style={styles.plusIcon}
             resizeMode="contain"
           />
           <Text style={styles.createButtonText}>Create Listing</Text>
+          </>
+          )}
         </TouchableOpacity>
       </ImageBackground>
+        {/* Verification Modal */}
+      {renderVerificationModal()}
     </View>
   );
 };
@@ -720,6 +841,120 @@ const styles = StyleSheet.create({
   createButtonText: {
     color: '#fff',
     fontSize: 15,
+    fontWeight: '600',
+  },
+   modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+ crossButton: {
+  position: 'absolute',
+  top: -20, // Half outside the modal
+  right: -20, // Half outside the modal
+  width: 40,
+  height: 40,
+  borderRadius: 20,
+  backgroundColor: '#fff', // White background
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 10,
+  shadowColor: '#000',
+  shadowOffset: {
+    width: 0,
+    height: 2,
+  },
+  shadowOpacity: 0.25,
+  shadowRadius: 3.84,
+  elevation: 5,
+  borderWidth: 2,
+  borderColor: '#f3f4f6',
+},
+  crossIcon: {
+    width: 18,
+    height: 18,
+    tintColor: '#6b7280',
+  },
+  crossText: {
+  fontSize: 20,
+  color: '#000',
+  fontWeight: 'bold',
+  lineHeight: 30,
+},
+  verificationModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    position: 'relative',
+    
+  },
+  modalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FFF2E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  modalIcon: {
+    fontSize: 40,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+    marginTop: 30
+  },
+  modalButtonsContainer: {
+    width: '100%',
+    gap: 12,
+  },
+  modalButton: {
+    paddingVertical: 12,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 40 
+  },
+  primaryButton: {
+    backgroundColor: '#401083',
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryButton: {
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  secondaryButtonText: {
+    color: '#6b7280',
+    fontSize: 16,
     fontWeight: '600',
   },
 });

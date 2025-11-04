@@ -919,7 +919,7 @@ const handleSendOTP = async () => {
                       setIsPhoneVerified(false);
                     }
                   }}
-                  editable={!isPhoneVerified} // Disable editing when verified
+                  // editable={!isPhoneVerified} // Disable editing when verified
                 />
                 {isPhoneVerified ? (
                   <View style={styles.verifiedBadge}>
@@ -2144,7 +2144,7 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
   },
   modalContent: {
     backgroundColor: '#fff',
@@ -2254,7 +2254,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   verifyActionButton: {
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#FF6B35',
   },
   verifyActionButtonText: {
     color: '#fff',
