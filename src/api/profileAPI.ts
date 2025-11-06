@@ -197,27 +197,24 @@ export const profileAPI = {
 
 // SMS Verification APIs - Send Raw String
 // SMS Verification APIs - With Correct xxx-xxx-xxxx Format
+// CORRECTED smsAPI.ts
+// SMS Verification APIs - With Correct xxx-xxx-xxxx Format
 export const smsAPI = {
-  // Send OTP to phone number - With correct formatting
   sendOTP: async (phoneNumber: string): Promise<SendSMSResponse> => {
     try {
       console.log('📱 Starting OTP send for:', phoneNumber);
       
-      // Format phone number for API - convert to xxx-xxx-xxxx format
-      const formattedPhoneNumber = formatPhoneNumberForSMSAPI(phoneNumber);
-      console.log('📱 Formatted for API:', formattedPhoneNumber);
-      
       console.log('🚀 API Request: POST /Account/SendPhonenumberOTP');
-      console.log('📤 Request Data (formatted):', formattedPhoneNumber);
+      console.log('📤 Request Data:', phoneNumber);
       
-      // Send as raw string in xxx-xxx-xxxx format
       const response = await apiClient.post(
         '/Account/SendPhonenumberOTP',
-        formattedPhoneNumber, // This should be: "318-534-3522"
+        phoneNumber,
         {
           headers: {
             'Content-Type': 'application/json',
-          }
+          },
+          timeout: 10000 // 10 second timeout
         }
       );
       
@@ -227,103 +224,97 @@ export const smsAPI = {
         success: true
       };
     } catch (error: any) {
-      console.error('❌ Failed to send OTP:', error);
+      console.error('❌ Failed to send OTP - Full backend response:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        headers: error.response?.headers,
+        url: error.response?.config?.url
+      });
       
-      // Enhanced error handling
-      if (error.response?.data?.errors) {
-        const validationErrors = error.response.data.errors;
-        console.log('🔍 Validation errors:', validationErrors);
-        
-        let errorMessage = 'Validation failed: ';
-        
-        if (validationErrors.phoneNumber) {
-          errorMessage += validationErrors.phoneNumber.join(', ');
-        } else if (validationErrors.$) {
-          errorMessage += validationErrors.$.join(', ');
-        } else {
-          errorMessage += JSON.stringify(validationErrors);
+      // Handle specific backend errors
+      if (error.response?.status === 400) {
+        // Bad Request - usually means phone number issue or pending OTP
+        throw new Error('Unable to send verification code. There might be a pending verification for this number.');
+      } else if (error.response?.status === 429) {
+        // Rate Limited
+        throw new Error('Too many verification attempts. Please wait before trying again.');
+      } else if (error.response?.status === 500) {
+        // Server Error - check for specific backend issues
+        const errorData = error.response?.data;
+        if (typeof errorData === 'string' && errorData.includes('RuntimeBinderException')) {
+          throw new Error('Verification service error. Please try again in a moment.');
         }
-        
-        throw new Error(errorMessage);
-      } else if (error.response?.data) {
-        const errorData = error.response.data;
-        if (typeof errorData === 'string') {
-          throw new Error(errorData);
-        } else if (errorData.message) {
-          throw new Error(errorData.message);
-        } else {
-          throw new Error('Failed to send verification code');
-        }
-      } else {
-        throw new Error('Failed to send verification code. Please try again.');
+        throw new Error('Verification service temporarily unavailable.');
+      } else if (error.code === 'ECONNABORTED') {
+        throw new Error('Request timeout. Please check your connection and try again.');
+      } else if (error.message.includes('Network Error')) {
+        throw new Error('Network connection issue. Please check your internet.');
       }
+      
+      throw new Error('Failed to send verification code. Please try again.');
     }
   },
 
-  // Verify OTP code - Also needs formatting
-  verifyOTP: async (phoneNumber: string, code: string): Promise<VerifySMSResponse> => {
-    try {
-      console.log('🔍 Verifying OTP:', { phoneNumber, code });
-      
-      // Format phone number for API - convert to xxx-xxx-xxxx format
-      const formattedPhoneNumber = formatPhoneNumberForSMSAPI(phoneNumber);
-      
-      // For verification, send as proper JSON object with formatted phone
-      const requestData = {
-        phoneNumber: formattedPhoneNumber, // Should be "318-534-3522"
-        otp: code
-      };
-
-      console.log('🚀 API Request: POST /Account/verify-phonenumber-otp');
-      console.log('📤 Verify Request Data (JSON object):', requestData);
-
-      const response = await apiClient.post<VerifySMSResponse>(
-        '/Account/verify-phonenumber-otp',
-        requestData,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        }
-      );
-      
-      console.log('✅ OTP verified successfully:', response.data);
-      return {
-        message: response.data?.message || 'Phone number verified',
-        success: true,
-        verified: true
-      };
-    } catch (error: any) {
-      console.error('❌ Failed to verify OTP:', error);
-      
-      if (error.response?.data?.errors) {
-        const validationErrors = error.response.data.errors;
-        let errorMessage = 'Validation failed: ';
-        
-        if (validationErrors.phoneNumber) {
-          errorMessage += validationErrors.phoneNumber.join(', ');
-        } else if (validationErrors.otp) {
-          errorMessage += validationErrors.otp.join(', ');
-        } else {
-          errorMessage += JSON.stringify(validationErrors);
-        }
-        
-        throw new Error(errorMessage);
-      } else if (error.response?.data) {
-        const errorData = error.response.data;
-        if (typeof errorData === 'string') {
-          throw new Error(errorData);
-        } else if (errorData.message) {
-          throw new Error(errorData.message);
-        } else {
-          throw new Error('Invalid verification code');
-        }
-      } else {
-        throw new Error('Invalid verification code. Please try again.');
-      }
+  // Verify OTP code - Send in xxx-xxx-xxxx format
+verifyOTP: async (phoneNumber: string, code: string): Promise<VerifySMSResponse> => {
+  try {
+    console.log('🔍 Verifying OTP:', { phoneNumber, code });
+    
+    // FIX: Ensure phone number is in xxx-xxx-xxxx format
+    let formattedPhoneNumber = phoneNumber;
+    
+    // If phone number doesn't have dashes, add them
+    if (!phoneNumber.includes('-') && phoneNumber.length === 10) {
+      formattedPhoneNumber = `${phoneNumber.substring(0, 3)}-${phoneNumber.substring(3, 6)}-${phoneNumber.substring(6)}`;
     }
-  },
+    
+    // Send as JSON object with formatted phone
+    const requestData = {
+      phoneNumber: formattedPhoneNumber, // Should be "302-924-8521" (with dashes)
+      otp: code
+    };
+
+    console.log('🚀 API Request: POST /Account/verify-phonenumber-otp');
+    console.log('📤 Verify Request Data:', requestData);
+
+    const response = await apiClient.post<VerifySMSResponse>(
+      '/Account/verify-phonenumber-otp',
+      requestData,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      }
+    );
+    
+    console.log('✅ OTP verified successfully:', response.data);
+    return {
+      message: response.data?.message || 'Phone number verified',
+      success: true,
+      verified: true
+    };
+  } catch (error: any) {
+    console.error('❌ Failed to verify OTP:', error);
+    
+    if (error.response?.data?.errors) {
+      const errors = error.response.data.errors;
+      console.log('🔍 Verification Errors:', errors);
+      
+      if (errors.includes("Invalid or expired OTP.")) {
+        throw new Error('Invalid or expired verification code. Please request a new code.');
+      }
+      throw new Error('Verification failed. Please try again.');
+    } else if (error.response?.data) {
+      throw new Error('Verification failed. Please try again.');
+    } else {
+      throw new Error('Verification failed. Please try again.');
+    }
+  }
+},
 };
+
+// REMOVE the formatPhoneNumberForSMSAPI function - it's causing confusion
 
 // Phone number formatting - Convert to xxx-xxx-xxxx format
 const formatPhoneNumberForSMSAPI = (phoneNumber: string): string => {

@@ -89,7 +89,7 @@ const EditProfileScreen: React.FC = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [profileExists, setProfileExists] = useState(false);
   const [profileDeleted, setProfileDeleted] = useState(false);
-
+  const userId = userInfo?.id;
   // Dropdown states
   const [showMarketDropdown, setShowMarketDropdown] = useState(false);
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
@@ -150,6 +150,7 @@ const EditProfileScreen: React.FC = () => {
   }, [route.params]);
 
 
+// Updated handleSendOTP function
 const handleSendOTP = async () => {
   if (!formData.phoneNumber.trim()) {
     Alert.alert('Error', 'Please enter your mobile number first');
@@ -162,39 +163,26 @@ const handleSendOTP = async () => {
   console.log('🔍 Validating phone number:', {
     original: formData.phoneNumber,
     cleaned: cleanNumber,
-    length: cleanNumber.length
+    length: cleanNumber.length,
+    timestamp: new Date().toISOString(),
+    isRetry: isSendingOTP // Track if this is a retry
   });
 
-  // Pakistani mobile number validation
-  let isValidPakistaniNumber = false;
-  let formattedNumber = cleanNumber;
+  // Pakistani mobile number validation - convert to 10 digits
+  let finalDigits = cleanNumber;
 
-  // Check different Pakistani mobile formats
+  // Handle different Pakistani formats and convert to 10 digits
   if (cleanNumber.startsWith('92') && cleanNumber.length === 12) {
-    formattedNumber = cleanNumber.substring(2);
-    isValidPakistaniNumber = true;
+    finalDigits = cleanNumber.substring(2); // Remove 92
   } else if (cleanNumber.startsWith('0') && cleanNumber.length === 11) {
-    formattedNumber = cleanNumber.substring(1);
-    isValidPakistaniNumber = true;
-  } else if (cleanNumber.startsWith('3') && cleanNumber.length === 10) {
-    isValidPakistaniNumber = true;
-  } else if (cleanNumber.length === 11 && /^[0-9]+$/.test(cleanNumber)) {
-    isValidPakistaniNumber = true;
+    finalDigits = cleanNumber.substring(1); // Remove 0
   }
 
-  if (!isValidPakistaniNumber) {
+  // Final validation - must be exactly 10 digits starting with 3
+  if (finalDigits.length !== 10 || !finalDigits.startsWith('3')) {
     Alert.alert(
       'Invalid Phone Number', 
-      'Please enter a valid Pakistani mobile number.\n\nExamples:\n• 03001234567\n• 3001234567\n• 923001234567'
-    );
-    return;
-  }
-
-  // Final length check - must be exactly 10 digits
-  if (formattedNumber.length !== 10) {
-    Alert.alert(
-      'Invalid Phone Number', 
-      'Please enter a valid 10-digit mobile number.'
+      'Please enter a valid Pakistani mobile number starting with 3.\n\nExamples:\n• 03001234567\n• 3001234567\n• 923001234567'
     );
     return;
   }
@@ -203,76 +191,112 @@ const handleSendOTP = async () => {
   setVerificationError('');
 
   try {
-    console.log('📱 Starting OTP send for:', {
-      original: formData.phoneNumber,
-      formatted: formattedNumber
+    // Format as xxx-xxx-xxxx for API (10 digits with dashes)
+    const apiFormattedNumber = `${finalDigits.substring(0, 3)}-${finalDigits.substring(3, 6)}-${finalDigits.substring(6)}`;
+    
+    console.log('📱 Sending OTP - Attempt details:', {
+      phoneNumber: apiFormattedNumber,
+      timestamp: new Date().toISOString(),
+      isModalVisible: isVerificationModalVisible
     });
 
-    // DEBUG: Show what we're sending
-    const finalFormattedNumber = `${formattedNumber.substring(0, 3)}-${formattedNumber.substring(3, 6)}-${formattedNumber.substring(6)}`;
-    console.log('🔧 DEBUG - Final formatted number:', finalFormattedNumber);
-
-    const response = await smsAPI.sendOTP(formattedNumber);
+    const response = await smsAPI.sendOTP(apiFormattedNumber);
     
     console.log('✅ OTP sent successfully:', response);
     
-    // Update form data with the formatted number (keep it in display format)
+    // Update form data with display format (xxx-xxx-xxxx)
     setFormData(prev => ({ 
       ...prev, 
-      phoneNumber: formattedNumber // Keep as digits for display
+      phoneNumber: apiFormattedNumber // Keep as formatted for display
     }));
     
     setIsVerificationModalVisible(true);
     Alert.alert('Success', response.message || 'Verification code sent to your phone');
     
   } catch (error: any) {
-    console.error('❌ Failed to send OTP:', {
+    console.error('❌ Failed to send OTP - Detailed error:', {
       error: error.message,
       status: error.response?.status,
-      data: error.response?.data
+      data: error.response?.data,
+      phoneNumber: formData.phoneNumber,
+      timestamp: new Date().toISOString(),
+      isRetry: true
     });
 
-    let errorMessage = error.message || 'Failed to send verification code';
+    let errorMessage = error.message || 'Failed to send verification code. Please try again.';
+    
+    // Handle different error scenarios
+    if (error.message.includes('temporarily unavailable')) {
+      errorMessage = 'Verification service is currently undergoing maintenance. Please try again in a few minutes.';
+    } else if (error.message.includes('RuntimeBinderException')) {
+      errorMessage = 'System error: Please contact support if this continues.';
+    } else if (error.response?.status === 400) {
+      errorMessage = 'Unable to send verification code. Please wait a few minutes before trying again.';
+    } else if (error.response?.status === 429) {
+      errorMessage = 'Too many attempts. Please wait before requesting a new code.';
+    }
     
     setVerificationError(errorMessage);
-    Alert.alert('Error', errorMessage);
+    Alert.alert('Verification Issue', errorMessage);
   } finally {
     setIsSendingOTP(false);
   }
 };
-  // Verify OTP Function
-  const handleVerifyOTP = async () => {
-    if (!otpCode.trim()) {
-      setVerificationError('Please enter the verification code');
-      return;
+// Updated handleVerifyOTP function
+const handleVerifyOTP = async () => {
+  if (!otpCode.trim()) {
+    setVerificationError('Please enter the verification code');
+    return;
+  }
+
+  setIsVerifyingOTP(true);
+  setVerificationError('');
+
+  try {
+    console.log('🔍 Verifying OTP:', { 
+      phoneNumber: formData.phoneNumber,
+      code: otpCode 
+    });
+    
+    // FIX: Ensure we're sending the formatted number with dashes
+    // If formData.phoneNumber doesn't have dashes, format it
+    let phoneNumberToVerify = formData.phoneNumber;
+    
+    if (!formData.phoneNumber.includes('-') && formData.phoneNumber.replace(/\D/g, '').length === 10) {
+      const cleanNumber = formData.phoneNumber.replace(/\D/g, '');
+      phoneNumberToVerify = `${cleanNumber.substring(0, 3)}-${cleanNumber.substring(3, 6)}-${cleanNumber.substring(6)}`;
     }
-
-    setIsVerifyingOTP(true);
-    setVerificationError('');
-
-    try {
-      console.log('🔍 Verifying OTP:', otpCode);
-      const response = await smsAPI.verifyOTP(formData.phoneNumber, otpCode);
-      
-      console.log('✅ OTP verified:', response);
-      
-      if (response.success && response.verified) {
-        setIsPhoneVerified(true);
-        setIsVerificationModalVisible(false);
-        setOtpCode('');
-        Alert.alert('Success', 'Phone number verified successfully!');
-      } else {
-        setVerificationError('Verification failed. Please try again.');
-      }
-    } catch (error: any) {
-      console.error('❌ Failed to verify OTP:', error);
-      const errorMessage = error.response?.data?.message || 'Invalid verification code';
-      setVerificationError(errorMessage);
-    } finally {
-      setIsVerifyingOTP(false);
+    
+    console.log('🔧 Final phone number for verification:', phoneNumberToVerify);
+    
+    const response = await smsAPI.verifyOTP(phoneNumberToVerify, otpCode);
+    
+    console.log('✅ OTP verified:', response);
+    
+    if (response.success && response.verified) {
+      setIsPhoneVerified(true);
+      setIsVerificationModalVisible(false);
+      setOtpCode('');
+      Alert.alert('Success', 'Phone number verified successfully!');
+    } else {
+      setVerificationError('Verification failed. Please try again.');
     }
-  };
-
+  } catch (error: any) {
+    console.error('❌ Failed to verify OTP:', error);
+    
+    let errorMessage = 'Invalid verification code. Please try again.';
+    
+    if (error.message.includes('expired')) {
+      errorMessage = 'Verification code has expired. Please request a new code.';
+    } else if (error.message.includes('Invalid')) {
+      errorMessage = 'Invalid verification code. Please check the code and try again.';
+    }
+    
+    setVerificationError(errorMessage);
+  } finally {
+    setIsVerifyingOTP(false);
+  }
+};
   // Close verification modal
   const handleCloseVerificationModal = () => {
     setIsVerificationModalVisible(false);
@@ -389,11 +413,15 @@ const handleSendOTP = async () => {
 };
 
   const pickImage = async (type: 'profile' | 'logo' | 'realEstateId') => {
+     if (!userId) {
+      Alert.alert('Error', 'User ID not found');
+      return;
+    }
     console.log(`Picking image for: ${type}`);
     setCurrentlyUploading(type);
     
     try {
-      const result = await pickAndUploadMedia();
+      const result = await pickAndUploadMedia(userId, 'sellerProfile');
       
       if (result && result.url) {
         console.log(`Setting ${type} image URL:`, result.url);
@@ -419,11 +447,16 @@ const handleSendOTP = async () => {
   };
 
   const pickGovtIdImage = async (idType: string) => {
+     if (!userId) {
+      Alert.alert('Error', 'User ID not found');
+      return;
+    }
+
     console.log(`Picking government ID image for: ${idType}`);
     setCurrentlyUploading(idType);
     
     try {
-      const result = await pickAndUploadMedia();
+      const result = await pickAndUploadMedia(userId, 'sellerProfile');
       
       if (result && result.url) {
         console.log(`Setting ${idType} image URL:`, result.url);
@@ -440,10 +473,14 @@ const handleSendOTP = async () => {
     }
   };
   const pickDocumentFile = async () => {
+      if (!userId) {
+      Alert.alert('Error', 'User ID not found');
+      return null;
+    }
     console.log('Picking document file');
     
     try {
-      const documentUrl = await pickAndUploadDocument();
+     const documentUrl = await pickAndUploadDocument(userId, 'sellerProfile');
       
       if (documentUrl) {
         console.log('Document uploaded successfully:', documentUrl);
@@ -817,7 +854,7 @@ const handleSendOTP = async () => {
             disabled={uploading}
           >
             <View style={styles.profileImageContainer}>
-              {uploading ? (
+               {uploading && currentlyUploading === 'profile' ? (
                 <View style={[styles.profileImage, styles.uploadingContainer]}>
                   <ActivityIndicator size="small" color="#6C63FF" />
                 </View>
@@ -833,7 +870,7 @@ const handleSendOTP = async () => {
                 />
               )}
               <View style={styles.editIconContainer}>
-                {uploading ? (
+                {uploading && currentlyUploading === 'profile' ? (
                   <ActivityIndicator size="small" color="#6C63FF" />
                 ) : (
                   <Image
@@ -900,53 +937,70 @@ const handleSendOTP = async () => {
           </View>
 
           {/* Mobile Number Field */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>
-              Mobile Number<Text style={styles.required}>*</Text>
-            </Text>
-            <View style={styles.inputContainer}>
-              <View style={styles.inputWithBadge}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="000-000-0000"
-                  placeholderTextColor="#999"
-                  keyboardType="phone-pad"
-                  value={formData.phoneNumber}
-                  onChangeText={(text) => {
-                    setFormData(prev => ({ ...prev, phoneNumber: text }));
-                    // Reset verification status if phone number changes
-                    if (isPhoneVerified) {
-                      setIsPhoneVerified(false);
-                    }
-                  }}
-                  // editable={!isPhoneVerified} // Disable editing when verified
-                />
-                {isPhoneVerified ? (
-                  <View style={styles.verifiedBadge}>
-                    <Text style={styles.verifiedText}>Verified</Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity 
-                    style={[styles.verifyButton, isSendingOTP && styles.verifyButtonDisabled]}
-                    onPress={handleSendOTP}
-                    disabled={isSendingOTP || !formData.phoneNumber.trim()}
-                  >
-                    {isSendingOTP ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Text style={styles.verifyButtonText}>Verify</Text>
-                    )}
-                  </TouchableOpacity>
-                )}
-              </View>
-              <View style={styles.inputLine} />
-            </View>
-            {isPhoneVerified && (
-              <Text style={styles.verifiedSuccessText}>
-                {/* ✓ Phone number verified successfully */}
-              </Text>
-            )}
-          </View>
+          {/* Mobile Number Field */}
+<View style={styles.formGroup}>
+  <Text style={styles.label}>
+    Mobile Number<Text style={styles.required}>*</Text>
+  </Text>
+  <View style={styles.inputContainer}>
+    <View style={styles.inputWithBadge}>
+  <TextInput
+  style={styles.input}
+  placeholder="300-123-4567"
+  placeholderTextColor="#999"
+  keyboardType="phone-pad"
+  value={formData.phoneNumber}
+  onChangeText={(text) => {
+    // Auto-format as user types to xxx-xxx-xxxx
+    let formattedText = text.replace(/\D/g, ''); // Remove non-digits
+    
+    // Auto-insert dashes for xxx-xxx-xxxx format
+    if (formattedText.length > 3 && formattedText.length <= 6) {
+      formattedText = `${formattedText.substring(0, 3)}-${formattedText.substring(3)}`;
+    } else if (formattedText.length > 6) {
+      formattedText = `${formattedText.substring(0, 3)}-${formattedText.substring(3, 6)}-${formattedText.substring(6, 10)}`;
+    }
+    
+    setFormData(prev => ({ ...prev, phoneNumber: formattedText }));
+    
+    // Reset verification status if phone number changes
+    if (isPhoneVerified) {
+      setIsPhoneVerified(false);
+    }
+  }}
+  maxLength={12} // 300-123-4567 = 12 characters
+/>
+      {isPhoneVerified ? (
+        <View style={styles.verifiedBadge}>
+          <Text style={styles.verifiedText}>Verified</Text>
+        </View>
+      ) : (
+        <TouchableOpacity 
+          style={[styles.verifyButton, 
+                 (isSendingOTP || !formData.phoneNumber.trim() || formData.phoneNumber.length < 10) && styles.verifyButtonDisabled]}
+          onPress={handleSendOTP}
+          disabled={isSendingOTP || !formData.phoneNumber.trim() || formData.phoneNumber.length < 10}
+        >
+          {isSendingOTP ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.verifyButtonText}>Verify</Text>
+          )}
+        </TouchableOpacity>
+      )}
+    </View>
+    <View style={styles.inputLine} />
+  </View>
+  {isPhoneVerified ? (
+    <Text style={styles.verifiedSuccessText}>
+      ✓ Phone number verified successfully
+    </Text>
+  ) : (
+    <Text style={styles.verificationHintText}>
+      Please verify your mobile number to continue
+    </Text>
+  )}
+</View>
 
 
           {/* Business Name */}
@@ -1878,6 +1932,7 @@ const styles = StyleSheet.create({
   },
    inputContainer: {
     position: 'relative',
+
   },
   govinputContainer: {
     position: 'absolute',
@@ -1886,10 +1941,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingVertical: 8,
     fontSize: 14,
-    color: '#333',
+    color: '#999',
     backgroundColor: 'transparent',
     borderWidth: 0,
-    marginLeft: 13
+    marginLeft: 13,
+
   },
   inputDisabled: {
     backgroundColor: '#F5F5F5',

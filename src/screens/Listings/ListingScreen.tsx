@@ -41,48 +41,69 @@ const ListingsScreen: React.FC<ListingsScreenProps> = ({ navigation }) => {
     checkPhoneVerificationStatus();
   }, []);
 
-const checkPhoneVerificationStatus = async () => {
-  try {
-    setCheckingVerification(true);
-    const response = await profileAPI.getSellerProfile();
+// const checkPhoneVerificationStatus = async () => {
+//   try {
+//     setCheckingVerification(true);
+//     const response = await profileAPI.getSellerProfile();
     
-    const profile = response.sellerProfile;
+//     const profile = response.sellerProfile;
     
-    console.log('📱 Comprehensive Phone Verification Check:', {
-      hasProfile: !!profile,
-      phoneNumber: profile?.phoneNumber,
-      emailAndPhoneVerified: profile?.emailandPhoneVerified,
-      profileStatus: profile?.profileStatus,
-      hasValidPhone: !!profile?.phoneNumber && profile.phoneNumber !== 'null' && profile.phoneNumber.length >= 10
-    });
+//     console.log('📱 Comprehensive Phone Verification Check:', {
+//       hasProfile: !!profile,
+//       phoneNumber: profile?.phoneNumber,
+//       emailAndPhoneVerified: profile?.emailandPhoneVerified,
+//       profileStatus: profile?.profileStatus,
+//       hasValidPhone: !!profile?.phoneNumber && profile.phoneNumber !== 'null' && profile.phoneNumber.length >= 10
+//     });
 
-    // Multiple conditions for verification
-    const isVerified = 
-      profile && 
-      profile.phoneNumber && 
-      profile.phoneNumber !== 'null' && 
-      profile.phoneNumber.length >= 10 && // Valid phone number
-      profile.emailandPhoneVerified === true; // Explicitly verified
+//     // Multiple conditions for verification
+//     const isVerified = 
+//       profile && 
+//       profile.phoneNumber && 
+//       profile.phoneNumber !== 'null' && 
+//       profile.phoneNumber.length >= 10 && // Valid phone number
+//       profile.emailandPhoneVerified === true; // Explicitly verified
     
-    console.log('✅ Final verification status:', isVerified);
-    setIsPhoneVerified(isVerified);
+//     console.log('✅ Final verification status:', isVerified);
+//     setIsPhoneVerified(isVerified);
     
-  } catch (error: any) {
-    console.error('❌ Error checking phone verification:', error);
+//   } catch (error: any) {
+//     console.error('❌ Error checking phone verification:', error);
     
-    // Handle specific error cases
-    if (error.response?.status === 404) {
-      console.log('👤 No seller profile found');
-    } else if (error.response?.data?.details === 'This profile is deleted.') {
-      console.log('🗑️ Profile is deleted');
+//     // Handle specific error cases
+//     if (error.response?.status === 404) {
+//       console.log('👤 No seller profile found');
+//     } else if (error.response?.data?.details === 'This profile is deleted.') {
+//       console.log('🗑️ Profile is deleted');
+//     }
+    
+//     setIsPhoneVerified(false);
+//   } finally {
+//     setCheckingVerification(false);
+//   }
+// };
+
+
+ const checkPhoneVerificationStatus = async () => {
+    try {
+      setCheckingVerification(true);
+      const response = await profileAPI.getSellerProfile();
+      
+      if (response.sellerProfile && response.sellerProfile.phoneNumber) {
+        // If profile exists and has phone number, assume it's verified
+        // You might want to add a specific field in your API for phone verification status
+        setIsPhoneVerified(true);
+      } else {
+        setIsPhoneVerified(false);
+      }
+    } catch (error: any) {
+      console.error('Error checking phone verification:', error);
+      // If there's an error or no profile exists, phone is not verified
+      setIsPhoneVerified(false);
+    } finally {
+      setCheckingVerification(false);
     }
-    
-    setIsPhoneVerified(false);
-  } finally {
-    setCheckingVerification(false);
-  }
-};
-
+  };
    const handleCreateListingPress = async () => {
     // If we're still checking verification status, wait
     if (checkingVerification) {

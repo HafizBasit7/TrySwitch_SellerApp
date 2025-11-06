@@ -24,6 +24,7 @@ import {
     LotUnit
 } from '../../types/propertyTypes';
 import { useImagePicker } from '../../hooks/useImagePicker';
+import { useAuth } from '../../context/AuthContext';
 
 interface MediaItem {
     url: string;
@@ -38,6 +39,7 @@ interface CreateListingScreenProps {
 
 const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation }) => {
     const { pickAndUploadMedia, pickAndUploadDocument, uploading, uploadingDocument } = useImagePicker();
+    const { userInfo } = useAuth();
 
     const [formData, setFormData] = useState({
         propertyAddress: '',
@@ -112,8 +114,19 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
             return;
         }
 
+           // Check if user is authenticated
+        if (!userInfo?.id) {
+            Toast.show({
+                type: 'error',
+                text1: 'Authentication Error',
+                text2: 'Please log in to upload media',
+                position: 'bottom',
+            });
+            return;
+        }
+
         try {
-            const mediaResult = await pickAndUploadMedia();
+             const mediaResult = await pickAndUploadMedia(userInfo.id, 'propertyImages');
 
             if (mediaResult) {
                 // Check limits before adding
@@ -157,8 +170,18 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
     };
 
     const handleDocumentUpload = async () => {
+          if (!userInfo?.id) {
+            Toast.show({
+                type: 'error',
+                text1: 'Authentication Error',
+                text2: 'Please log in to upload documents',
+                position: 'bottom',
+            });
+            return;
+        }
+        
         try {
-            const documentResult = await pickAndUploadDocument();
+           const documentResult = await pickAndUploadDocument(userInfo.id, 'propertyImages');
 
             console.log('📄 Document upload result:', documentResult);
 
@@ -814,7 +837,7 @@ const CreateListingScreen: React.FC<CreateListingScreenProps> = ({ navigation })
                     success: (props) => (
                         <View style={styles.toastContainer}>
                             <View style={[styles.toast, styles.successToast]}>
-                                <Text style={styles.toastText1}>{props.text1}</Text>
+                                {/* <Text style={styles.toastText1}>{props.text1}</Text> */}
                                 <Text style={styles.toastText2}>{props.text2}</Text>
                             </View>
                         </View>
@@ -1286,7 +1309,7 @@ const styles = StyleSheet.create({
     },
     toast: {
         paddingHorizontal: 20,
-        paddingVertical: 12,
+        paddingVertical: 6,
         borderRadius: 8,
         marginHorizontal: 20,
         minWidth: 200,

@@ -177,7 +177,7 @@ const PreviewListingScreen: React.FC<PreviewListingScreenProps> = ({ navigation,
                 text2: successMessage,
                 position: 'bottom',
                 visibilityTime: 2000,
-                bottomOffset: insets.bottom + 40,
+                bottomOffset: 100,
                 onHide: () => navigation.navigate('ListingMain'),
             });
 
@@ -186,6 +186,33 @@ const PreviewListingScreen: React.FC<PreviewListingScreenProps> = ({ navigation,
 
             if (error.response?.status === 500) {
                 const errorMessage = error.response?.data;
+                   // Handle video plan restriction error
+        if (errorMessage?.includes('Your plan does not include video per listing')) {
+            Toast.show({
+                type: 'error',
+                text1: '🎥 Video Upload Not Available',
+                text2: 'Upgrade to Pro plan to upload videos with your listings',
+                position: 'bottom',
+                visibilityTime: 6000,
+                bottomOffset: 100,
+                props: {
+                     style: {
+                        backgroundColor: '#FF6B35',
+                        borderLeftColor: '#FF4500',
+                        borderLeftWidth: 6,
+                        borderRadius: 12,
+                        marginHorizontal: 20,
+                        marginBottom: 20, // Extra margin from bottom
+                    }
+                },
+                
+                onPress: () => {
+                    // Optional: Navigate to upgrade plan screen
+                    // navigation.navigate('UpgradePlan');
+                }
+            });
+            return;
+        }
                 if (errorMessage?.includes('already exists')) {
                     Toast.show({
                         type: 'error',

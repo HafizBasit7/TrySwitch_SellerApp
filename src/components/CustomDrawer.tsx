@@ -83,43 +83,53 @@ const CustomDrawer = (props: any) => {
     });
   };
 
-  useEffect(() => {
-    load2FAStatus();
-  }, []);
-
   // Function to get user info from token
   const getUserInfo = () => {
-    if (!userToken) return { profileType: 'Unknown', email: '', name: '' };
+    if (!userToken) return { profileType: 'Unknown', email: '', name: '', userId: '' };
     
     try {
       const decoded = decodeJWT(userToken);
       
       if (!decoded) {
-        return { profileType: 'Unknown', email: '', name: '' };
+        return { profileType: 'Unknown', email: '', name: '', userId: '' };
       }
       
       const profileType = decoded.UserProfileType;
       const email = decoded.email || decoded.unique_name || '';
       const name = decoded.name || email.split('@')[0] || 'User';
+      const userId = decoded.sub || decoded.userId || email;
       
-      return { profileType, email, name };
+      return { profileType, email, name, userId };
     } catch (error) {
       console.error('Error decoding token:', error);
-      return { profileType: 'Unknown', email: '', name: '' };
+      return { profileType: 'Unknown', email: '', name: '', userId: '' };
     }
+  };
+
+  // Get storage key for current user's 2FA status
+  const get2FAStorageKey = (userId?: string) => {
+    const userInfo = getUserInfo();
+    const currentUserId = userId || userInfo.userId;
+    return `user2FAStatus_${currentUserId}`;
   };
 
   const load2FAStatus = async () => {
     try {
-      // Try to load 2FA status from AsyncStorage
-      const stored2FAStatus = await AsyncStorage.getItem('user2FAStatus');
-      console.log('📱 Loaded 2FA status from storage:', stored2FAStatus);
-      
-      if (stored2FAStatus !== null) {
-        setIsTwoFAEnabled(JSON.parse(stored2FAStatus));
-      } else {
-        // Default to false if no stored status
-        setIsTwoFAEnabled(false);
+      const userInfo = getUserInfo();
+      if (userInfo.userId) {
+        // Use profile-specific storage key
+        const storageKey = get2FAStorageKey(userInfo.userId);
+        const stored2FAStatus = await AsyncStorage.getItem(storageKey);
+        console.log('📱 Loaded 2FA status for user:', userInfo.userId, 'status:', stored2FAStatus);
+        
+        if (stored2FAStatus !== null) {
+          setIsTwoFAEnabled(JSON.parse(stored2FAStatus));
+        } else {
+          // If no stored status, default to false
+          setIsTwoFAEnabled(false);
+          // Initialize storage with default value
+          await save2FAStatus(false, userInfo.userId);
+        }
       }
     } catch (error) {
       console.error('Error loading 2FA status:', error);
@@ -127,10 +137,15 @@ const CustomDrawer = (props: any) => {
     }
   };
 
-  const save2FAStatus = async (enabled: boolean) => {
+  const save2FAStatus = async (enabled: boolean, userId?: string) => {
     try {
-      await AsyncStorage.setItem('user2FAStatus', JSON.stringify(enabled));
-      console.log('💾 Saved 2FA status:', enabled);
+      const userInfo = getUserInfo();
+      const currentUserId = userId || userInfo.userId;
+      if (currentUserId) {
+        const storageKey = get2FAStorageKey(currentUserId);
+        await AsyncStorage.setItem(storageKey, JSON.stringify(enabled));
+        console.log('💾 Saved 2FA status for user:', currentUserId, 'status:', enabled);
+      }
     } catch (error) {
       console.error('Error saving 2FA status:', error);
     }
@@ -145,9 +160,10 @@ const CustomDrawer = (props: any) => {
       // Direct API call to enable/disable 2FA
       await authAPI.enable2FA({ isTwoFactorEnabled: enabled });
       
-      // Update local state
+      // Update local state with profile-specific storage
+      const userInfo = getUserInfo();
       setIsTwoFAEnabled(enabled);
-      await save2FAStatus(enabled);
+      await save2FAStatus(enabled, userInfo.userId);
       
       showToast(
         'success', 
@@ -164,6 +180,10 @@ const CustomDrawer = (props: any) => {
       setIsLoading2FA(false);
     }
   };
+
+  useEffect(() => {
+    load2FAStatus();
+  }, [userToken]); // Re-run when token changes
 
   const handleLogout = () => {
     setShowLogoutModal(true);

@@ -26,6 +26,7 @@ import {
 } from '../../types/propertyTypes';
 import { useImagePicker } from '../../hooks/useImagePicker';
 import { propertyListingsAPI } from '../../api/propertyListingsAPI';
+import { useAuth } from '../../context/AuthContext';
 
 interface MediaItem {
     url: string;
@@ -46,6 +47,7 @@ interface EditListingScreenProps {
 const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route }) => {
     const { listing } = route.params;
     const { pickAndUploadMedia, pickAndUploadDocument, uploading, uploadingDocument } = useImagePicker();
+const { userInfo } = useAuth();
 
     const [formData, setFormData] = useState({
         propertyAddress: listing.propertyAddress || '',
@@ -109,12 +111,26 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                 text1: 'Limit Reached',
                 text2: `Maximum ${MAX_IMAGES} images and ${MAX_VIDEOS} video reached`,
                 position: 'bottom',
+                 visibilityTime: 2000,
+                bottomOffset: 100,
             });
             return;
         }
 
+          if (!userInfo?.id) {
+                    Toast.show({
+                        type: 'error',
+                        text1: 'Authentication Error',
+                        text2: 'Please log in to upload media',
+                        position: 'bottom',
+                         visibilityTime: 2000,
+                bottomOffset: 100,
+                    });
+                    return;
+                }
+
         try {
-            const mediaResult = await pickAndUploadMedia();
+          const mediaResult = await pickAndUploadMedia(userInfo.id, 'propertyImages');
 
             if (mediaResult) {
                 // Check limits before adding
@@ -124,6 +140,8 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                         text1: 'Limit Reached',
                         text2: `Maximum ${MAX_IMAGES} images allowed`,
                         position: 'bottom',
+                         visibilityTime: 2000,
+                bottomOffset: 100,
                     });
                     return;
                 }
@@ -134,6 +152,8 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                         text1: 'Limit Reached',
                         text2: `Maximum ${MAX_VIDEOS} video allowed`,
                         position: 'bottom',
+                         visibilityTime: 2000,
+                bottomOffset: 100,
                     });
                     return;
                 }
@@ -144,6 +164,9 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                     text1: 'Success',
                     text2: 'Media uploaded successfully',
                     position: 'bottom',
+                     
+                visibilityTime: 2000,
+                bottomOffset: 100,
                 });
             }
         } catch (error) {
@@ -152,15 +175,29 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                 type: 'error',
                 text1: 'Error',
                 text2: 'Failed to upload media. Please try again.',
-                position: 'bottom',
+                 position: 'bottom',
+                visibilityTime: 2000,
+                bottomOffset: 100,
             });
         }
     };
 
     const handleDocumentUpload = async () => {
-        try {
-            const documentResult = await pickAndUploadDocument();
-
+      if (!userInfo?.id) {
+                 Toast.show({
+                     type: 'error',
+                     text1: 'Authentication Error',
+                     text2: 'Please log in to upload documents',
+                     position: 'bottom',
+                      visibilityTime: 2000,
+                bottomOffset: 100,
+                 });
+                 return;
+             }
+             
+             try {
+                const documentResult = await pickAndUploadDocument(userInfo.id, 'propertyImages');
+     
             console.log('📄 Document upload result:', documentResult);
 
             if (documentResult) {
@@ -171,6 +208,10 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                     text1: 'Success',
                     text2: 'Document uploaded successfully',
                     position: 'bottom',
+                
+                 
+                visibilityTime: 2000,
+                bottomOffset: 100,
                 });
             }
         } catch (error) {
@@ -180,6 +221,8 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                 text1: 'Error',
                 text2: 'Failed to upload document. Please try again.',
                 position: 'bottom',
+                 visibilityTime: 2000,
+                bottomOffset: 100,
             });
         }
     };
@@ -216,6 +259,8 @@ const EditListingScreen: React.FC<EditListingScreenProps> = ({ navigation, route
                 text1: 'Validation Error',
                 text2: failedValidation.message,
                 position: 'bottom',
+                 visibilityTime: 2000,
+                bottomOffset: 100,
             });
             return false;
         }
