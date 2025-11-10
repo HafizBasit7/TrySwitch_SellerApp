@@ -1,4 +1,4 @@
-// screens/Chat/ChatsScreen.tsx - UPDATED WITH BETTER DEBUGGING
+// screens/Chat/ChatsScreen.tsx - INBOX CHATS (FINAL)
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -37,150 +37,78 @@ const ChatsScreen: React.FC = () => {
   useFocusEffect(
     useCallback(() => {
       if (userId) {
-        console.log('🔄 Screen focused, loading chats for userId:', userId);
+        console.log('🔄 [Inbox] Screen focused, loading chats');
         loadChats();
       }
     }, [userId])
   );
 
+  const getUserId = async () => {
+    try {
+      console.log('🔍 [Inbox] Looking for userId');
 
-  // screens/Chat/ChatsScreen.tsx - Add this function
-const debugAsyncStorage = async () => {
-  try {
-    console.log('🔍 Debugging AsyncStorage...');
-    
-    // Get all keys from AsyncStorage
-    const keys = await AsyncStorage.getAllKeys();
-    console.log('📋 All AsyncStorage keys:', keys);
-    
-    // Get all items
-    const items = await AsyncStorage.multiGet(keys);
-    console.log('📦 All AsyncStorage items:');
-    items.forEach(([key, value]) => {
-      console.log(`   ${key}: ${value}`);
-    });
-    
-    // Try different possible keys for userId
-    const possibleKeys = ['userId', 'userID', 'user_id', 'id', 'user.id', 'UserID'];
-    for (const key of possibleKeys) {
-      const value = await AsyncStorage.getItem(key);
-      if (value) {
-        console.log(`✅ Found userId with key: "${key}" = ${value}`);
-      }
-    }
-    
-  } catch (error) {
-    console.error('❌ Error debugging AsyncStorage:', error);
-  }
-};
+      const userInfoString = await AsyncStorage.getItem('userInfo');
 
-  // screens/Chat/ChatsScreen.tsx - Update getUserId function
-const getUserId = async () => {
-  try {
-    console.log('🔍 Looking for userId in AsyncStorage...');
-    
-    // First, try to get from userInfo object
-    const userInfoString = await AsyncStorage.getItem('userInfo');
-    console.log('📦 userInfo from storage:', userInfoString);
-    
-    if (userInfoString) {
-      try {
+      if (userInfoString) {
         const userInfo = JSON.parse(userInfoString);
-        console.log('🔍 Parsed userInfo:', userInfo);
-        
         if (userInfo.id) {
-          console.log(`✅ Found userId in userInfo: ${userInfo.id}`);
+          console.log('✅ [Inbox] Found userId');
           setUserId(userInfo.id);
           return;
-        } else {
-          console.log('❌ userInfo exists but no id field:', Object.keys(userInfo));
         }
-      } catch (parseError) {
-        console.error('❌ Error parsing userInfo:', parseError);
       }
-    }
-    
-    // Fallback: try direct keys
-    const possibleKeys = ['userId', 'userID', 'user_id', 'id', 'user.id', 'UserID'];
-    for (const key of possibleKeys) {
-      const storedValue = await AsyncStorage.getItem(key);
-      console.log(`   Checking key "${key}":`, storedValue);
-      
-      if (storedValue) {
-        console.log(`✅ Found userId with key: "${key}" = ${storedValue}`);
-        setUserId(storedValue);
-        return;
+
+      // Fallback: try other possible keys
+      const possibleKeys = ['userId', 'userID', 'user_id', 'id'];
+      for (const key of possibleKeys) {
+        const value = await AsyncStorage.getItem(key);
+        if (value) {
+          console.log('✅ [Inbox] Found userId from fallback');
+          setUserId(value);
+          return;
+        }
       }
+
+      console.error('❌ [Inbox] No userId found');
+      Toast.show({
+        type: 'error',
+        text1: 'Login Required',
+        text2: 'Please login again to continue',
+      });
+    } catch (error) {
+      console.error('❌ [Inbox] Error getting userId:', error);
     }
-    
-    console.log('❌ No userId found anywhere');
-    Toast.show({
-      type: 'error',
-      text1: 'Login Required',
-      text2: 'Please login again to continue',
-    });
-    
-  } catch (error) {
-    console.error('❌ Error getting userId:', error);
-  }
-};
-// screens/Chat/ChatsScreen.tsx - Update loadChats function
-const loadChats = async () => {
-  try {
-    setLoading(true);
-    console.log('💬 API Call: Getting user chats for:', userId);
-    
-    const response = await chatAPI.getUserChats(userId);
-    console.log('📥 PROCESSED API RESPONSE:', JSON.stringify(response, null, 2));
-    
-    if (response.success) {
-      if (response.chats && Array.isArray(response.chats)) {
-        console.log(`✅ SUCCESS: Received ${response.chats.length} chats`);
-        
-        // Log each chat for debugging
-        response.chats.forEach((chat, index) => {
-          console.log(`💬 Chat ${index + 1}:`, {
-            userId: chat.userId,
-            userName: chat.userName,
-            profileImage: chat.userProfileImage,
-            lastMessage: chat.lastMessage,
-            lastMessageTime: chat.lastMessageTime,
-            unreadCount: chat.unreadCount,
-            profileType: chat.userProfileType
-          });
-        });
-        
+  };
+
+  const loadChats = async () => {
+    try {
+      setLoading(true);
+      console.log('💬 [Inbox] Loading chats');
+
+      const response = await chatAPI.getUserChats(userId);
+
+      if (response.success && response.chats?.length) {
+        console.log(`✅ [Inbox] Loaded ${response.chats.length} chats`);
         setChats(response.chats);
         setFilteredChats(response.chats);
       } else {
-        console.log('⚠️ No chats array found in processed response');
+        console.log('⚠️ [Inbox] No chats found');
         setChats([]);
         setFilteredChats([]);
       }
-    } else {
-      console.log('❌ API returned success: false');
-      console.log('📝 API message:', response.message);
+    } catch (error: any) {
+      console.error('❌ [Inbox] Error loading chats:', error.message);
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: response.message || 'Failed to load chats',
+        text2: error.message || 'Failed to load chats',
       });
       setChats([]);
       setFilteredChats([]);
+    } finally {
+      setLoading(false);
     }
-  } catch (error: any) {
-    console.error('❌ NETWORK ERROR loading chats:', error);
-    Toast.show({
-      type: 'error',
-      text1: 'Network Error',
-      text2: error.message || 'Failed to connect to server',
-    });
-    setChats([]);
-    setFilteredChats([]);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -193,7 +121,7 @@ const loadChats = async () => {
     if (text.trim() === '') {
       setFilteredChats(chats);
     } else {
-      const filtered = chats.filter(chat =>
+      const filtered = chats.filter((chat) =>
         chat.userName.toLowerCase().includes(text.toLowerCase())
       );
       setFilteredChats(filtered);
@@ -205,7 +133,7 @@ const loadChats = async () => {
       const date = new Date(timestamp);
       const now = new Date();
       const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-      
+
       if (diffInHours < 24) {
         return date.toLocaleTimeString('en-US', {
           hour: '2-digit',
@@ -220,112 +148,109 @@ const loadChats = async () => {
           month: 'short',
         });
       }
-    } catch (error) {
-      return 'Unknown';
+    } catch {
+      return '';
     }
   };
 
- // screens/Chat/ChatsScreen.tsx - Update renderChatItem
-const renderChatItem = ({ item }: { item: ChatUser }) => (
-  <TouchableOpacity
-    style={styles.chatItem}
-    onPress={() => {
-      console.log('📱 Navigating to conversation with:', {
-        userId: item.userId,
-        userName: item.userName,
-        userProfileImage: item.userProfileImage,
-        userProfileType: item.userProfileType
-      });
-      navigation.navigate('ChatConversation', {
-        userId: item.userId,
-        userName: item.userName || 'User',
-        userProfileImage: item.userProfileImage,
-        userProfileType: item.userProfileType || 1, // Default to investor type
-      });
-    }}
-  >
-    <View style={styles.avatarContainer}>
-      {item.userProfileImage ? (
-        <Image
-          source={{ uri: item.userProfileImage }}
-          style={styles.avatar}
-          onError={(e) => console.log('❌ Image load error:', e.nativeEvent.error)}
-        />
-      ) : (
-        <View style={[styles.avatar, styles.avatarPlaceholder]}>
-          <Text style={styles.avatarText}>
-            {item.userName?.charAt(0)?.toUpperCase() || 'U'}
-          </Text>
-        </View>
-      )}
-      {item.unreadCount > 0 && (
-        <View style={styles.avatarBadge}>
-          <Text style={styles.avatarBadgeText}>
-            {item.unreadCount > 9 ? '9+' : item.unreadCount}
-          </Text>
-        </View>
-      )}
-    </View>
-
-    <View style={styles.chatContent}>
-      <View style={styles.chatHeader}>
-        <Text style={styles.userName} numberOfLines={1}>
-          {item.userName || `User ${item.userId.substring(0, 8)}`}
-        </Text>
-        <Text style={styles.timestamp}>
-          {formatTime(item.lastMessageTime)}
-        </Text>
+  const renderChatItem = ({ item }: { item: ChatUser }) => (
+    <TouchableOpacity
+      style={styles.chatItem}
+      onPress={() => {
+        console.log('📱 [Inbox] Opening chat with:', item.userName);
+        navigation.navigate('ChatConversation', {
+          userId: item.userId,
+          userName: item.userName || 'User',
+          userProfileImage: item.userProfileImage,
+          userProfileType: item.userProfileType || 1,
+        });
+      }}
+    >
+      <View style={styles.avatarContainer}>
+        {item.userProfileImage ? (
+          <Image source={{ uri: item.userProfileImage }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatar, styles.avatarPlaceholder]}>
+            <Text style={styles.avatarText}>{item.userName?.charAt(0)?.toUpperCase() || 'U'}</Text>
+          </View>
+        )}
+       
       </View>
-      <View style={styles.messageRow}>
-        <Text
-          style={styles.lastMessage}
-          numberOfLines={2}
-          ellipsizeMode="tail"
-        >
+
+      <View style={styles.contentContainer}>
+        <View style={styles.headerRow}>
+          <Text style={styles.userName} numberOfLines={1}>
+            {item.userName || `User ${item.userId.substring(0, 8)}`}
+          </Text>
+          <Text style={styles.timestamp}>{formatTime(item.lastMessageTime)}</Text>
+        </View>
+        <Text style={styles.lastMessage} numberOfLines={2}>
           {item.lastMessage || 'Start a conversation'}
         </Text>
+
+         {item.unreadCount > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{item.unreadCount > 9 ? '9+' : item.unreadCount}</Text>
+          </View>
+        )}
       </View>
-    </View>
-  </TouchableOpacity>
-);
+    </TouchableOpacity>
+  );
 
   if (loading) {
     return (
-      <View style={styles.centered}>
+      <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#FF4500" />
         <Text style={styles.loadingText}>Loading chats...</Text>
-        <Text style={styles.debugText}>User ID: {userId}</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {/* Debug Header */}
-      {/* <View style={styles.debugHeader}>
-        <Text style={styles.debugText}>
-          User: {userId ? userId.substring(0, 8) + '...' : 'Not found'} | 
-          Chats: {chats.length}
-        </Text>
-      </View> */}
+   
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search chats..."
+          placeholder="Search by name"
           placeholderTextColor="#999"
           value={searchQuery}
           onChangeText={handleSearch}
         />
-        <Text style={styles.searchIcon}>🔍</Text>
+       
+         <Image 
+          source={require('../../assets/icons/search.png')}
+          style={styles.searchIcon}
+          />
       </View>
+
+      {/* Marketplace Tab Link */}
+      <TouchableOpacity 
+        style={styles.marketplaceLink}
+        onPress={() => {
+          // console.log('🏠 [Inbox] Navigating to Property Hub');
+          navigation.navigate('MarketplaceMessages');
+        }}
+      >
+        <Image 
+          source={require('../../assets/icons/marketplace.png')}
+          style={styles.marketplaceLinkIcon}
+          />
+        <View style={styles.marketplaceLinkContent}>
+          <Text style={styles.marketplaceLinkTitle}>Property Hub</Text>
+          <Text style={styles.marketplaceLinkSubtitle}>Chat about properties</Text>
+       
+        </View>
+    
+      </TouchableOpacity>
 
       {/* Chat List */}
       <FlatList
         data={filteredChats}
         renderItem={renderChatItem}
-        keyExtractor={item => item.userId}
+        keyExtractor={(item) => item.userId}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
@@ -339,29 +264,13 @@ const renderChatItem = ({ item }: { item: ChatUser }) => (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyTitle}>No chats yet</Text>
             <Text style={styles.emptySubtitle}>
-              {userId ? 
-                "Start a conversation or wait for others to message you" : 
-                "Unable to load user information"
-              }
+              {userId
+                ? 'Start a conversation or wait for others to message you'
+                : 'Unable to load user information'}
             </Text>
-            <TouchableOpacity 
-              style={styles.retryButton}
-              onPress={loadChats}
-            >
-              <Text style={styles.retryButtonText}>
-                {userId ? 'Refresh' : 'Retry'}
-              </Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadChats}>
+              <Text style={styles.retryButtonText}>{userId ? 'Refresh' : 'Retry'}</Text>
             </TouchableOpacity>
-            
-            {/* Debug Info */}
-            <View style={styles.debugBox}>
-              <Text style={styles.debugInfoText}>
-                Debug Info:{'\n'}
-                • User ID: {userId || 'Not found'}{'\n'}
-                • API Called: Yes{'\n'}
-                • Chats Found: {chats.length}
-              </Text>
-            </View>
           </View>
         }
       />
@@ -369,41 +278,31 @@ const renderChatItem = ({ item }: { item: ChatUser }) => (
   );
 };
 
-
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
   },
-  centered: {
+  centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+
   loadingText: {
     marginTop: 12,
     fontSize: 14,
     color: '#666',
   },
-  debugInfo: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#f0f0f0',
-  },
-  debugText: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-  },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    marginHorizontal: 16,
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
     marginVertical: 12,
     borderRadius: 25,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
+    elevation: 5
   },
   searchInput: {
     flex: 1,
@@ -412,27 +311,58 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   searchIcon: {
-    fontSize: 20,
-    marginLeft: 8,
+   width: 25,
+   height: 25,
+   tintColor: '#FF4500',
+  },
+  marketplaceLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+
+  },
+  marketplaceLinkIcon: {
+   width: 46,
+    height: 46,
+    borderRadius: 28,
+  },
+  marketplaceLinkContent: {
+   flexGrow: 1,
+    // paddingBottom: 16,
+  },
+  marketplaceLinkTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginLeft: 10,
+
+   marginBottom: 2,
+  },
+  marketplaceLinkSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginLeft: 10,
   },
   listContent: {
     flexGrow: 1,
-    paddingBottom: 16,
+    // paddingBottom: 16,
   },
   chatItem: {
     flexDirection: 'row',
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: '#F5F5F5',
   },
   avatarContainer: {
     marginRight: 12,
   },
   avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 46,
+    height: 46,
+    borderRadius: 28,
   },
   avatarPlaceholder: {
     backgroundColor: '#FF4500',
@@ -441,102 +371,15 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     color: '#fff',
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
   },
-  chatContent: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  chatHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  timestamp: {
-    fontSize: 12,
-    color: '#999',
-  },
-  messageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  lastMessage: {
-    flex: 1,
-    fontSize: 14,
-    color: '#666',
-    marginRight: 8,
-  },
-  unreadBadge: {
+  badge: {
+    position: 'absolute',
+    top: -10,
+    right: -4,
     backgroundColor: '#FF4500',
     borderRadius: 12,
-    minWidth: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  unreadText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 100,
-    paddingHorizontal: 40,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emptySubText: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 20,
-  },
-  retryButton: {
-    backgroundColor: '#FF4500',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-   debugHeader: {
-    backgroundColor: '#f8f9fa',
-    padding: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
-  },
-  // debugText: {
-  //   fontSize: 12,
-  //   color: '#6c757d',
-  //   textAlign: 'center',
-  // },
-  avatarBadge: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    backgroundColor: '#FF4500',
-    borderRadius: 10,
     minWidth: 20,
     height: 20,
     justifyContent: 'center',
@@ -544,35 +387,67 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#fff',
   },
-  avatarBadgeText: {
+  badgeText: {
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
   },
+  contentContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    // marginBottom: 4,
+  },
+  userName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  timestamp: {
+    fontSize: 12,
+    color: '#999',
+    marginLeft: 8,
+    top: 10
+  },
+  lastMessage: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
   emptyTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#495057',
+    color: '#333',
     marginBottom: 8,
-    textAlign: 'center',
   },
   emptySubtitle: {
-    fontSize: 16,
-    color: '#6c757d',
+    fontSize: 14,
+    color: '#666',
     textAlign: 'center',
     marginBottom: 20,
-    lineHeight: 22,
+    lineHeight: 20,
   },
-  debugBox: {
-    backgroundColor: '#e9ecef',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 20,
+  retryButton: {
+    backgroundColor: '#FF4500',
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 20,
   },
-  debugInfoText: {
-    fontSize: 12,
-    color: '#495057',
-    // fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

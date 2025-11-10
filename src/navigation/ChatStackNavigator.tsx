@@ -6,6 +6,8 @@ import ChatsScreen from '../screens/Chat/ChatsScreen';
 import ChatConversationScreen from '../screens/Chat/ChatConversationScreen';
 import { investorAPI } from '../api/investorAPI';
 import { ChatsStackParamList } from './types';
+import MarketplaceMessagesScreen from '../screens/Chat/MarketplaceMessagesScreen';
+import MarketplaceConversationScreen from '../screens/Chat/MarketplaceConversationScreen';
 
 const Stack = createStackNavigator<ChatsStackParamList>();
 
@@ -109,7 +111,7 @@ const ChatConversationHeaderLeft: React.FC<{
   );
 };
 
-// ✅ Wrapper component to hide tab bar when focused
+// ✅ Wrapper component to hide tab bar for Chat Conversation
 const ChatConversationScreenWithHiddenTabs = (props: any) => {
   const navigation = props.navigation;
 
@@ -133,6 +135,30 @@ const ChatConversationScreenWithHiddenTabs = (props: any) => {
   return <ChatConversationScreen {...props} />;
 };
 
+// ✅ Wrapper component to hide tab bar for Marketplace Conversation
+const MarketplaceConversationScreenWithHiddenTabs = (props: any) => {
+  const navigation = props.navigation;
+
+  useFocusEffect(
+    React.useCallback(() => {
+      // Hide tab bar on focus
+      const parent = navigation.getParent();
+      parent?.setOptions({
+        tabBarStyle: { display: 'none' },
+      });
+
+      return () => {
+        // Show tab bar again when leaving
+        parent?.setOptions({
+          tabBarStyle: { display: 'flex' },
+        });
+      };
+    }, [navigation])
+  );
+
+  return <MarketplaceConversationScreen {...props} />;
+};
+
 const ChatsStackNavigator: React.FC = () => {
   return (
     <Stack.Navigator
@@ -142,7 +168,6 @@ const ChatsStackNavigator: React.FC = () => {
           elevation: 0,
           shadowOpacity: 0,
           height: 80,
-          
         },
         headerTintColor: '#fff',
         headerTitleStyle: {
@@ -165,10 +190,39 @@ const ChatsStackNavigator: React.FC = () => {
         name="ChatConversation" 
         component={ChatConversationScreenWithHiddenTabs}
         options={({ route, navigation }) => ({
-          title:'Inbox',
+          title: 'Inbox',
           headerShown: true,
-          
-        
+       
+        })}
+      />
+      <Stack.Screen 
+        name="MarketplaceMessages" 
+        component={MarketplaceMessagesScreen}
+        options={{
+          title: 'Property Hub',
+          headerShown: true,
+           headerStyle: {
+            backgroundColor: '#FF4500',
+            elevation: 0,
+            shadowOpacity: 0,
+            height:80
+          },
+        }}
+      />
+      <Stack.Screen 
+        name="MarketplaceConversationScreen" 
+        component={MarketplaceConversationScreenWithHiddenTabs}
+        options={({ route, navigation }) => ({
+          title:  'Inbox',
+          headerShown: true,
+          headerStyle: {
+            backgroundColor: '#FF4500',
+            elevation: 0,
+            shadowOpacity: 0,
+            height:80
+          },
+          headerTintColor: '#fff',
+         
         })}
       />
     </Stack.Navigator>
