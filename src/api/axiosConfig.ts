@@ -26,7 +26,7 @@ apiClient.interceptors.request.use(
 
     console.log('🚀 API Request:', config.method?.toUpperCase(), config.url);
     console.log('📦 Request Headers:', config.headers);
-    console.log('📤 Request Data:', config.data);
+    // console.log('📤 Request Data:', config.data);
     return config;
   },
   (error) => {
@@ -38,7 +38,7 @@ apiClient.interceptors.request.use(
 // Enhanced response interceptor with token expiration handling
 apiClient.interceptors.response.use(
   (response) => {
-    console.log('✅ API Response:', response.status, response.data);
+    // console.log('✅ API Response:', response.status, response.data);
     return response;
   },
   (error) => {

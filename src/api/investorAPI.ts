@@ -147,7 +147,7 @@ sendBulkEmailInvites: async (
     });
     
     console.log('✅ API Response Status:', response.status);
-    console.log('✅ API Response Data:', response.data);
+    // console.log('✅ API Response Data:', response.data);
     
     // Verify the response matches Swagger
     if (response.data !== 'Emails sent successfully') {
