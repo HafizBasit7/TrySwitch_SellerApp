@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import { Alert, Platform } from 'react-native';
 import { awsUploadService, UploadModule } from '../services/awsUploadService';
+import { chatUploadService } from '../services/chatUploadService';
 
 interface UseImagePickerReturn {
   pickAndUploadMedia: (userId: string, module?: UploadModule) => Promise<{url: string, type: 'image' | 'video'} | null>;
@@ -11,12 +12,79 @@ interface UseImagePickerReturn {
   uploading: boolean;
   uploadingDocument: boolean;
   uploadingMultiple: boolean;
+  pickAndUploadChatMedia: (userId: string) => Promise<{url: string, type: 'image' | 'video'} | null>;
+  pickAndUploadChatDocument: (userId: string) => Promise<string | null>;
 }
 
 export const useImagePicker = (): UseImagePickerReturn => {
   const [uploading, setUploading] = useState(false);
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [uploadingMultiple, setUploadingMultiple] = useState(false);
+
+
+  const pickAndUploadChatMedia = async (
+    userId: string
+  ): Promise<{url: string, type: 'image' | 'video'} | null> => {
+    try {
+      console.log('Starting CHAT media picker for AWS S3:', { userId });
+      const mediaResult = await pickMedia();
+      
+      if (!mediaResult) {
+        console.log('Chat media pick cancelled');
+        return null;
+      }
+
+      console.log(`Chat media picked, starting AWS S3 upload - type: ${mediaResult.type}`);
+      setUploading(true);
+
+      let mediaUrl: string;
+      
+      if (mediaResult.type === 'image') {
+        mediaUrl = await chatUploadService.uploadChatImage(mediaResult.data, userId);
+      } else {
+        mediaUrl = await chatUploadService.uploadChatVideo(mediaResult.data, userId);
+      }
+
+      console.log(`✅ Chat AWS S3 upload successful for ${mediaResult.type}:`, mediaUrl);
+      return { url: mediaUrl, type: mediaResult.type };
+
+    } catch (error) {
+      console.error('❌ Error picking/uploading chat media to AWS S3:', error);
+      Alert.alert('Upload Error', 'Failed to upload media. Please try again.');
+      return null;
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const pickAndUploadChatDocument = async (
+    userId: string
+  ): Promise<string | null> => {
+    try {
+      console.log('Starting CHAT document picker for AWS S3:', { userId });
+      const documentResult = await pickDocument();
+      
+      if (!documentResult) {
+        console.log('Chat document pick cancelled');
+        return null;
+      }
+
+      console.log('Chat document picked, starting AWS S3 upload');
+      setUploadingDocument(true);
+      
+      const documentUrl = await chatUploadService.uploadChatDocument(documentResult, userId);
+      console.log('✅ Chat document upload successful to AWS S3:', documentUrl);
+      
+      return documentUrl;
+
+    } catch (error) {
+      console.error('❌ Error picking/uploading chat document to AWS S3:', error);
+      Alert.alert('Upload Error', 'Failed to upload document. Please try again.');
+      return null;
+    } finally {
+      setUploadingDocument(false);
+    }
+  };
 
   const pickAndUploadMedia = async (
     userId: string, 
@@ -118,6 +186,8 @@ export const useImagePicker = (): UseImagePickerReturn => {
     uploading,
     uploadingDocument,
     uploadingMultiple,
+     pickAndUploadChatMedia,
+    pickAndUploadChatDocument,
   };
 };
 

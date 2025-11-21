@@ -202,7 +202,7 @@ export const propertyListingsAPI = {
         }
       );
       
-      console.log('✅ API Response:', response.status, response.data);
+      // console.log('✅ API Response:', response.status, response.data);
       return response.data;
     } catch (error: any) {
       console.error('❌ API Error Details:', {
@@ -371,7 +371,7 @@ export const propertyListingsAPI = {
         }
       );
       
-      console.log('✅ API Response:', response.status, response.data);
+      // console.log('✅ API Response:', response.status, response.data);
       return response.data;
     } catch (error: any) {
       console.error('❌ API Error Details:', {

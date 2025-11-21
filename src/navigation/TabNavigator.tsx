@@ -22,15 +22,21 @@ const TabIcon: React.FC<TabIconProps> = ({ focused, iconSource, label }) => (
       source={iconSource}
       style={[styles.tabIcon, { tintColor: focused ? '#fff' : 'rgba(255, 255, 255, 0.6)' }]}
     />
-    <Text
-      style={[
-        styles.tabLabel,
-        { color: focused ? '#fff' : 'rgba(255, 255, 255, 0.6)' },
-      ]}
-    >
+    <Text style={[styles.tabLabel, { color: focused ? '#fff' : 'rgba(255, 255, 255, 0.6)' }]}>
       {label}
     </Text>
     {focused && <View style={styles.activeTabIndicator} />}
+  </View>
+);
+
+// Custom curved background component
+const CurvedTabBarBackground: React.FC = () => (
+  <View style={styles.curvedBackground}>
+    <ImageBackground
+      source={require('../assets/images/auth-bg.png')}
+      style={StyleSheet.absoluteFillObject}
+      resizeMode="cover"
+    />
   </View>
 );
 
@@ -38,12 +44,19 @@ const TabNavigator: React.FC = () => {
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
 
   useEffect(() => {
-    const showListener = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
-    const hideListener = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
 
     return () => {
-      showListener.remove();
-      hideListener.remove();
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
     };
   }, []);
 
@@ -51,23 +64,8 @@ const TabNavigator: React.FC = () => {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          backgroundColor: 'transparent',
-          borderTopWidth: 0,
-          elevation: 0,
-          height: isKeyboardVisible ? 0 : 70, // 👈 Hide when keyboard open
-        },
-        tabBarBackground: () => (
-          <ImageBackground
-            source={require('../assets/images/auth-bg.png')}
-            style={StyleSheet.absoluteFillObject}
-            resizeMode="cover"
-          />
-        ),
+        tabBarStyle: isKeyboardVisible ? styles.tabBarHidden : styles.tabBarVisible,
+        tabBarBackground: () => <CurvedTabBarBackground />,
         tabBarShowLabel: false,
       }}
     >
@@ -150,18 +148,38 @@ const styles = StyleSheet.create({
   tabIcon: {
     width: 24,
     height: 24,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   tabLabel: {
     fontSize: 11,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   activeTabIndicator: {
-    width: 50,
+    width: 80,
     height: 3,
     backgroundColor: '#fff',
     borderRadius: 2,
+  },
+  tabBarVisible: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'transparent',
+    borderTopWidth: 0,
+    elevation: 0,
+    height: 65, // Slightly increased height for better curve visibility
+  },
+  tabBarHidden: {
+    display: 'none',
+  },
+  curvedBackground: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderTopLeftRadius: 25, // Adjust this value for more/less curve
+    borderTopRightRadius: 25, // Adjust this value for more/less curve
+    overflow: 'hidden',
   },
 });
 

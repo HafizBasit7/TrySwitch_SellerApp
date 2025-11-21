@@ -19,7 +19,7 @@ export interface AwsUploadResponse {
   files: AwsFileResponse[];
 }
 
-export type UploadModule = 'sellerProfile' | 'propertyImages';
+export type UploadModule = 'sellerProfile' | 'propertyImages'| 'chat';
 
 class AwsUploadService {
   private baseUrl = 'https://goswitch.app';

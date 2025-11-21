@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,14 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
-  ImageBackground
+  ImageBackground,
+  FlatList
 } from 'react-native';
 import Video from 'react-native-video';
 import { PropertyListing } from '../../types/propertyTypes';
 import { propertyListingsAPI } from '../../api/propertyListingsAPI';
+import { marketplaceAPI } from '../../api/marketplace';
+import { MarketPlaceChatThread } from '../../types/marketplace';
 
 const { width } = Dimensions.get('window');
 
@@ -39,11 +42,71 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
   const [showAllDetails, setShowAllDetails] = useState(false);
   const [currentPlayingVideoIndex, setCurrentPlayingVideoIndex] = useState<number | null>(null);
   const [inlineVideoPaused, setInlineVideoPaused] = useState<{ [key: number]: boolean }>({});
+  const [propertyChats, setPropertyChats] = useState<MarketPlaceChatThread[]>([]);
+  const [chatsLoading, setChatsLoading] = useState(false);
   const videoRef = useRef<Video>(null);
   const fullScreenVideoRef = useRef<Video>(null);
+  const [showRenewModal, setShowRenewModal] = useState(false);
+
+
+  // Load chats for this specific property
+  useEffect(() => {
+    loadPropertyChats();
+  }, [listing.propertyListingId]);
+
+  const loadPropertyChats = async () => {
+    try {
+      setChatsLoading(true);
+      console.log('🏠 [Property Detail] Loading chats for property:', listing.propertyListingId);
+
+      const response = await marketplaceAPI.getMarketPlaceUserChats();
+      
+      if (response.chats && Array.isArray(response.chats)) {
+        // Filter chats to only show ones for this specific property
+        const filteredChats = response.chats.filter(
+          chat => chat.propertyId === listing.propertyListingId
+        );
+        
+        console.log(`✅ [Property Detail] Found ${filteredChats.length} chats for this property`);
+        setPropertyChats(filteredChats);
+      } else {
+        setPropertyChats([]);
+      }
+    } catch (error: any) {
+      console.error('❌ [Property Detail] Error loading property chats:', error.message);
+      setPropertyChats([]);
+    } finally {
+      setChatsLoading(false);
+    }
+  };
 
   const formatPrice = (price: number) => {
     return `$${price?.toLocaleString() || '0'}`;
+  };
+
+  const formatTime = (timestamp: string) => {
+    try {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+
+      if (diffInHours < 24) {
+        return date.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        });
+      } else if (diffInHours < 48) {
+        return 'Yesterday';
+      } else {
+        return date.toLocaleDateString('en-US', {
+          day: 'numeric',
+          month: 'short',
+        });
+      }
+    } catch {
+      return '';
+    }
   };
 
   // Toggle inline video play/pause
@@ -130,28 +193,76 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
   };
 
   const handleRenewListing = async () => {
-    Alert.alert(
-      'Renew Listing',
-      'Are you sure you want to renew this listing?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Renew',
-          onPress: async () => {
-            setIsProcessing(true);
-            try {
-              await propertyListingsAPI.renewProperty(listing.propertyListingId);
-              Alert.alert('Success', 'Property renewed successfully');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to renew property. Please try again.');
-            } finally {
-              setIsProcessing(false);
-            }
-          },
-        },
-      ]
-    );
+  setShowRenewModal(false);
+  setIsProcessing(true);
+
+  try {
+    await propertyListingsAPI.renewProperty(listing.propertyListingId);
+    Alert.alert('Success', 'Property renewed successfully');
+  } catch (error) {
+    Alert.alert('Error', 'Failed to renew property. Please try again.');
+  } finally {
+    setIsProcessing(false);
+  }
+};
+
+
+  const navigateToChat = (chat: MarketPlaceChatThread) => {
+    navigation.navigate('MarketplaceConversationScreen', {
+      propertyId: chat.propertyId,
+      propertyAddress: chat.propertyAddress,
+      propertyImage: chat.propertyImage,
+      userId: chat.userId,
+      userName: chat.userName,
+      userProfileImage: chat.userProfileImage,
+      userProfileType: chat.userProfileType,
+    });
   };
+
+  const renderChatItem = ({ item }: { item: MarketPlaceChatThread }) => (
+    <TouchableOpacity
+      style={styles.chatItem}
+      onPress={() => navigateToChat(item)}
+      activeOpacity={0.7}
+    >
+      {/* User Avatar */}
+      <View style={styles.chatAvatarContainer}>
+        {item.userProfileImage ? (
+          <Image source={{ uri: item.userProfileImage }} style={styles.chatAvatar} />
+        ) : (
+          <View style={styles.chatAvatarPlaceholder}>
+            <Text style={styles.chatAvatarText}>
+              {item.userName?.charAt(0)?.toUpperCase() || 'U'}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Chat Content */}
+      <View style={styles.chatContent}>
+        <View style={styles.chatHeader}>
+          <Text style={styles.chatUserName} numberOfLines={1}>
+            {item.userName}
+          </Text>
+          <Text style={styles.chatTimestamp}>
+            {formatTime(item.lastMessageTime)}
+          </Text>
+        </View>
+        <Text style={styles.chatLastMessage} numberOfLines={2}>
+          {item.lastMessage || 'No messages yet'}
+        </Text>
+      </View>
+
+      {/* Unread Badge */}
+      {item.unreadCount > 0 && (
+        <View style={styles.chatUnreadBadge}>
+          <Text style={styles.chatUnreadBadgeText}>
+            {item.unreadCount > 9 ? '9+' : item.unreadCount}
+          </Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
 
   const images = listing.siteOrPropertyImages || [];
   const totalImages = images.length;
@@ -399,7 +510,7 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
 
             <TouchableOpacity
               style={styles.secondaryButton}
-              onPress={handleRenewListing}
+             onPress={() => setShowRenewModal(true)}
               disabled={isProcessing}
             >
               <Text style={styles.secondaryButtonText}>Renew Listing</Text>
@@ -504,14 +615,33 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
           <View style={styles.chatsSection}>
             <View style={styles.chatsSectionHeader}>
               <Text style={styles.chatsTitle}>Chats</Text>
-              <TouchableOpacity>
-                <Text style={styles.seeAll}>See All</Text>
+              <TouchableOpacity onPress={loadPropertyChats}>
+                <Text style={styles.seeAll}>Refresh</Text>
               </TouchableOpacity>
             </View>
 
-            <View style={styles.emptyChatState}>
-              <Text style={styles.emptyChatText}>No chats yet</Text>
-            </View>
+            {chatsLoading ? (
+              <View style={styles.chatsLoading}>
+                <ActivityIndicator size="small" color="#FF4500" />
+                <Text style={styles.chatsLoadingText}>Loading chats...</Text>
+              </View>
+            ) : propertyChats.length > 0 ? (
+              <FlatList
+                data={propertyChats}
+                renderItem={renderChatItem}
+                keyExtractor={(item) => `${item.propertyId}-${item.userId}`}
+                scrollEnabled={false}
+                contentContainerStyle={styles.chatsList}
+              />
+            ) : (
+              <View style={styles.emptyChatState}>
+                <Text style={styles.emptyChatIcon}>💬</Text>
+                <Text style={styles.emptyChatText}>No chats yet for this property</Text>
+                <Text style={styles.emptyChatSubtext}>
+                  When someone messages you about this property, it will appear here
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -579,6 +709,39 @@ const ListingDetailScreen: React.FC<ListingDetailScreenProps> = ({ navigation, r
           </View>
         </View>
       </Modal>
+
+      <Modal
+  visible={showRenewModal}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setShowRenewModal(false)}
+>
+  <View style={styles.modalOverlay}>
+    <View style={styles.modalContent}>
+      <Text style={styles.modalTitle}>Renew Listing</Text>
+      <Text style={styles.modalMessage}>
+        Are you sure you want to renew this listing?
+      </Text>
+
+      <View style={styles.modalButtons}>
+        <TouchableOpacity
+          style={styles.modalCancelButton}
+          onPress={() => setShowRenewModal(false)}
+        >
+          <Text style={styles.modalCancelText}>Cancel</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.modalConfirmButton}
+          onPress={handleRenewListing}
+        >
+          <Text style={styles.modalConfirmText}>Renew</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+</Modal>
+
 
       {/* Processing Overlay */}
       {isProcessing && (
@@ -918,8 +1081,9 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontWeight: '500',
   },
+  // Chats Section Styles
   chatsSection: {
-    marginBottom: 24,
+    marginBottom: 54,
   },
   chatsSectionHeader: {
     flexDirection: 'row',
@@ -937,13 +1101,106 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  chatsList: {
+    paddingTop: 2,
+  },
+  chatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  chatAvatarContainer: {
+    marginRight: 12,
+  },
+  chatAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
+  chatAvatarPlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#7C3AED',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chatAvatarText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  chatContent: {
+    flex: 1,
+  },
+  chatHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  chatUserName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    flex: 1,
+  },
+  chatTimestamp: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  chatLastMessage: {
+    fontSize: 14,
+    color: '#6b7280',
+    lineHeight: 18,
+  },
+  chatUnreadBadge: {
+    backgroundColor: '#FF4500',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  chatUnreadBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  chatsLoading: {
+    paddingVertical: 30,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  chatsLoadingText: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
   emptyChatState: {
     paddingVertical: 40,
     alignItems: 'center',
   },
+  emptyChatIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
   emptyChatText: {
+    fontSize: 16,
+    color: '#6b7280',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  emptyChatSubtext: {
     fontSize: 14,
     color: '#9ca3af',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   // Full Screen Video Styles
   fullScreenVideo: {

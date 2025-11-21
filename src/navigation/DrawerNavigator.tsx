@@ -3,7 +3,6 @@ import React from 'react';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { DrawerParamList } from './types';
 import TabNavigator from './TabNavigator';
-import HomeScreen from '../screens/HomeScreen';
 import CustomDrawer from '../components/CustomDrawer';
 
 const Drawer = createDrawerNavigator<DrawerParamList>();
@@ -22,7 +21,6 @@ const DrawerNavigator: React.FC = () => {
       }}
     >
       <Drawer.Screen name="MainTabs" component={TabNavigator} />
-      <Drawer.Screen name="Home" component={HomeScreen} />
     </Drawer.Navigator>
   );
 };

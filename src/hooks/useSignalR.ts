@@ -1,4 +1,4 @@
-// hooks/useSignalR.ts - UPDATED FOR RECEIVE-ONLY
+// hooks/useSignalR.ts - UPDATED WITH MARKETPLACE HANDLERS
 import { useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../store';
@@ -12,9 +12,19 @@ import {
   updateChatLastMessage,
   setError,
 } from '../store/slices/chatSlice';
+import {
+  addMarketplaceMessage,
+  markMarketplaceMessagesAsRead,
+  deleteMarketplaceMessage,
+  updateMarketplaceChatThread,
+  replaceOptimisticMarketplaceMessage,
+  updateMarketplaceChatLastMessage
+
+} from '../store/slices/marketplaceSlice';
 import { signalRService, SignalREventHandlers } from '../services/signalRService';
 import { useAuth } from '../context/AuthContext';
 import { Message } from '../types/chat';
+import { MarketPlaceMessage } from '../types/marketplace';
 
 /**
  * Custom hook to manage SignalR connection for RECEIVING messages only
@@ -29,47 +39,123 @@ export const useSignalR = () => {
   /**
    * Event Handlers - ONLY for receiving and processing messages
    */
-const handleMessageReceived = useCallback((rawMessage: any) => {
-  console.log('📨 [Hook] Raw message received:', rawMessage);
-  
-  // Normalize the message structure to match our Message interface
-  const normalizedMessage: Message = {
-    id: rawMessage.id || Date.now(),
-    messageId: rawMessage.id,
-    senderId: rawMessage.senderId,
-    senderName: '', // Will be populated from chat list
-    senderProfileImage: '', // Will be populated from chat list
-    receiverId: rawMessage.receiverId,
-    receiverName: '', // Will be populated from chat list
-    receiverProfileImage: '', // Will be populated from chat list
-    content: rawMessage.content,
-    timestamp: rawMessage.timestamp,
-    isRead: rawMessage.isRead || false,
-    replyedMessageId: rawMessage.replyedMessageId,
-  };
+  const handleMessageReceived = useCallback((rawMessage: any) => {
+    console.log('📨 [Hook] Raw message received:', rawMessage);
+    
+    // Normalize the message structure to match our Message interface
+    const normalizedMessage: Message = {
+      id: rawMessage.id || Date.now(),
+      messageId: rawMessage.id,
+      senderId: rawMessage.senderId,
+      senderName: '', // Will be populated from chat list
+      senderProfileImage: '', // Will be populated from chat list
+      receiverId: rawMessage.receiverId,
+      receiverName: '', // Will be populated from chat list
+      receiverProfileImage: '', // Will be populated from chat list
+      content: rawMessage.content,
+      timestamp: rawMessage.timestamp,
+      isRead: rawMessage.isRead || false,
+      replyedMessageId: rawMessage.replyedMessageId,
+    };
 
-  console.log('📨 [Hook] Normalized message:', normalizedMessage);
-  
-  // Determine which user this message belongs to
-  const otherUserId = normalizedMessage.senderId === userInfo?.id 
-    ? normalizedMessage.receiverId 
-    : normalizedMessage.senderId;
-  
-  // Add message to Redux store
-  dispatch(addMessage({ userId: otherUserId, message: normalizedMessage }));
-  dispatch(updateChatLastMessage({ userId: otherUserId, message: normalizedMessage }));
-  
-  console.log('✅ [Hook] Message added to store for user:', otherUserId);
-}, [dispatch, userInfo?.id]);
+    console.log('📨 [Hook] Normalized message:', normalizedMessage);
+    
+    // Determine which user this message belongs to
+    const otherUserId = normalizedMessage.senderId === userInfo?.id 
+      ? normalizedMessage.receiverId 
+      : normalizedMessage.senderId;
+    
+    // Add message to Redux store
+    dispatch(addMessage({ userId: otherUserId, message: normalizedMessage }));
+    dispatch(updateChatLastMessage({ userId: otherUserId, message: normalizedMessage }));
+    
+    console.log('✅ [Hook] Message added to store for user:', otherUserId);
+  }, [dispatch, userInfo?.id]);
 
-  const handleMessageRead = useCallback((data: any) => {
+    const handleMessageRead = useCallback((data: any) => {
     console.log('✅ [Hook] Messages read notification:', data);
-    // Extract message IDs and user ID from the data
     const messageIds = Array.isArray(data.messageIds) ? data.messageIds : [];
     const userId = data.userId || data.senderId;
     
     if (messageIds.length > 0 && userId) {
       dispatch(markMessagesAsRead({ userId, messageIds }));
+    }
+  }, [dispatch]);
+
+  /**
+   * MARKETPLACE MESSAGE HANDLER - NEW
+   */
+// In hooks/useSignalR.ts - UPDATE MARKETPLACE HANDLERS
+ const handleMarketplaceMessageReceived = useCallback((rawMessage: any) => {
+    console.log('📦 [Hook] Marketplace message received:', rawMessage);
+    
+    if (!userInfo?.id) {
+      console.warn('⚠️ [Hook] No user info available for marketplace message');
+      return;
+    }
+
+    try {
+      // Normalize marketplace message
+      const normalizedMessage: MarketPlaceMessage = {
+        id: rawMessage.id || rawMessage.messageId || Date.now(),
+        messageId: rawMessage.id || rawMessage.messageId,
+        senderId: rawMessage.senderId,
+        senderName: rawMessage.senderName || '',
+        senderProfileImage: rawMessage.senderProfileImage || '',
+        receiverId: rawMessage.receiverId,
+        receiverName: rawMessage.receiverName || '',
+        receiverProfileImage: rawMessage.receiverProfileImage || '',
+        content: rawMessage.content,
+        timestamp: rawMessage.timestamp || new Date().toISOString(),
+        isRead: rawMessage.isRead || false,
+        propertyId: rawMessage.propertyId,
+        propertyAddress: rawMessage.propertyAddress || '',
+        replyedMessageId: rawMessage.replyedMessageId,
+      };
+
+      console.log('📦 [Hook] Normalized marketplace message:', normalizedMessage);
+      
+      const otherUserId = normalizedMessage.senderId === userInfo.id 
+        ? normalizedMessage.receiverId 
+        : normalizedMessage.senderId;
+      
+      // Check if this might be replacing an optimistic message
+      const isPotentialReplacement = !rawMessage.id && rawMessage.messageId;
+      
+      if (isPotentialReplacement) {
+        dispatch(replaceOptimisticMarketplaceMessage({
+          propertyId: normalizedMessage.propertyId,
+          userId: otherUserId,
+          tempId: normalizedMessage.id,
+          realMessage: normalizedMessage
+        }));
+      } else {
+        dispatch(addMarketplaceMessage({ 
+          propertyId: normalizedMessage.propertyId, 
+          userId: otherUserId, 
+          message: normalizedMessage 
+        }));
+        dispatch(updateMarketplaceChatLastMessage({ 
+          propertyId: normalizedMessage.propertyId, 
+          userId: otherUserId, 
+          message: normalizedMessage 
+        }));
+      }
+      
+      console.log('✅ [Hook] Marketplace message processed for property:', normalizedMessage.propertyId);
+    } catch (error) {
+      console.error('❌ [Hook] Error processing marketplace message:', error);
+    }
+  }, [dispatch, userInfo?.id]);
+
+  const handleMarketMessageRead = useCallback((data: any) => {
+    console.log('✅ [Hook] Marketplace messages read:', data);
+    const messageIds = Array.isArray(data.messageIds) ? data.messageIds : [data.messageId].filter(Boolean);
+    const propertyId = data.propertyId;
+    const userId = data.userId;
+    
+    if (messageIds.length > 0 && propertyId && userId) {
+      dispatch(markMarketplaceMessagesAsRead({ propertyId, userId, messageIds }));
     }
   }, [dispatch]);
 
@@ -80,6 +166,18 @@ const handleMessageReceived = useCallback((rawMessage: any) => {
     
     if (messageId && userId) {
       dispatch(deleteMessage({ userId, messageId }));
+    }
+  }, [dispatch]);
+
+  /**
+   * MARKETPLACE MESSAGE DELETE HANDLER - NEW
+   */
+  const handleMessageDeleteMarket = useCallback((data: any) => {
+    console.log('🗑️ [Hook] Marketplace message deleted:', data);
+    const messageId = data.messageId || data.id;
+    
+    if (messageId) {
+      dispatch(deleteMarketplaceMessage(messageId));
     }
   }, [dispatch]);
 
@@ -99,7 +197,6 @@ const handleMessageReceived = useCallback((rawMessage: any) => {
     console.error('❌ [Hook] SignalR connection closed:', error?.message);
     dispatch(setConnectionStatus(false));
     dispatch(setConnecting(false));
-    // Don't show error - SignalR is optional for receiving
   }, [dispatch]);
 
   /**
@@ -128,35 +225,31 @@ const handleMessageReceived = useCallback((rawMessage: any) => {
         onMessageRead: handleMessageRead,
         onMessageDeleted: handleMessageDeleted,
         
+        // MARKETPLACE HANDLERS - UPDATED FROM STUBS
+        onMarketPlaceMessageReceived: handleMarketplaceMessageReceived,
+        onMarketMessageRead: handleMarketMessageRead,
+        onMessageDeleteMarket: handleMessageDeleteMarket,
+        
         // Connection handlers
         onReconnecting: handleReconnecting,
         onReconnected: handleReconnected,
         onConnectionClosed: handleConnectionClosed,
         
-        // Other handlers (stub implementations)
-        onMarketPlaceMessageReceived: (message) => {
-          console.log('📦 Marketplace message (stub):', message);
-        },
-        onMarketMessageRead: (data) => {
-          console.log('✅ Marketplace read (stub):', data);
-        },
-        onMessageDeleteMarket: (data) => {
-          console.log('🗑️ Marketplace deleted (stub):', data);
-        },
+        // Other handlers
         onUserLoggedIn: (userId) => {
-          console.log('👤 User logged in (stub):', userId);
+          console.log('👤 User logged in:', userId);
         },
         onNotificationReceived: (notification) => {
-          console.log('🔔 Notification (stub):', notification);
+          console.log('🔔 Notification received:', notification);
         },
         onNotificationSeen: (notificationId) => {
-          console.log('👁️ Notification seen (stub):', notificationId);
+          console.log('👁️ Notification seen:', notificationId);
         },
         onInvitationAccepted: (data) => {
-          console.log('🤝 Invitation accepted (stub):', data);
+          console.log('🤝 Invitation accepted:', data);
         },
         onInvestorDeleted: (data) => {
-          console.log('🚫 Investor deleted (stub):', data);
+          console.log('🚫 Investor deleted:', data);
         },
       };
 
@@ -172,7 +265,6 @@ const handleMessageReceived = useCallback((rawMessage: any) => {
       console.error('❌ SignalR connection failed:', error);
       dispatch(setConnectionStatus(false));
       dispatch(setConnecting(false));
-      // Don't show error to user - SignalR is optional
     } finally {
       isConnectingRef.current = false;
     }
@@ -182,8 +274,11 @@ const handleMessageReceived = useCallback((rawMessage: any) => {
     isConnected,
     dispatch,
     handleMessageReceived,
+    handleMarketplaceMessageReceived,
     handleMessageRead,
+    handleMarketMessageRead,
     handleMessageDeleted,
+    handleMessageDeleteMarket,
     handleReconnecting,
     handleReconnected,
     handleConnectionClosed,
@@ -220,7 +315,6 @@ const handleMessageReceived = useCallback((rawMessage: any) => {
     isConnected,
     connectSignalR,
     disconnectSignalR,
-    // NO send methods - we use API for sending
   };
 };
 

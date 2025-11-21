@@ -1,188 +1,394 @@
 // components/chat/MessageBubble.tsx
-import React, { memo } from 'react';
+import React from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   Image,
+  StyleSheet,
 } from 'react-native';
-import { MessageBubbleProps } from '../../types/chat';
+import { Message } from '../../types/chat';
 
-const MessageBubble: React.FC<MessageBubbleProps> = ({
+interface MessageBubbleProps {
+  message: Message;
+  isOwnMessage: boolean;
+  investorName: string;
+  investorImage?: string;
+  currentUserImage?: string;
+  onPressMenu: (message: Message, event: any) => void;
+  formatTime: (timestamp: string) => string;
+  showAvatar?: boolean;
+}
+
+export const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
   isOwnMessage,
-  onLongPress,
+  investorName,
+  investorImage,
+  currentUserImage,
+  onPressMenu,
+  formatTime,
+  showAvatar = true,
 }) => {
-  const handleLongPress = () => {
-    onLongPress?.(message.id);
-  };
-
-  const formatTime = (timestamp: string) => {
-    try {
-      return new Date(timestamp).toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      });
-    } catch {
-      return '';
-    }
-  };
+  const isImage = message.content.startsWith('https://tryswitch.s3.us-east-2.amazonaws.com/chat/Images/');
+  const isDocument = message.content.startsWith('[DOCUMENT]');
+  const mediaUrl = isImage || isDocument ? 
+    message.content.replace('[IMAGE]', '').replace('[DOCUMENT]', '') : null;
 
   return (
-    <TouchableOpacity
-      style={[
-        styles.container,
-        isOwnMessage ? styles.ownContainer : styles.otherContainer,
-      ]}
-      onLongPress={handleLongPress}
-      activeOpacity={0.7}
-      delayLongPress={500}
-    >
-      {/* Reply indicator if this is a reply */}
-      {message.replyedMessage && (
-        <View style={[
-          styles.replyContainer,
-          isOwnMessage ? styles.ownReplyContainer : styles.otherReplyContainer,
-        ]}>
-          <Text style={styles.replyLabel}>Replying to:</Text>
-          <Text style={styles.replyContent} numberOfLines={1}>
-            {message.replyedMessage.content}
-          </Text>
+    <View style={[
+      styles.messageRow,
+      isOwnMessage ? styles.ownMessageRow : styles.otherMessageRow,
+    ]}>
+      {!isOwnMessage && showAvatar && (
+        <View style={styles.avatarContainer}>
+          {investorImage ? (
+            <Image source={{ uri: investorImage }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+              <Text style={styles.avatarText}>
+                {investorName?.charAt(0)?.toUpperCase() || 'U'}
+              </Text>
+            </View>
+          )}
         </View>
       )}
 
-      {/* Message content */}
       <View style={[
-        styles.bubble,
-        isOwnMessage ? styles.ownBubble : styles.otherBubble,
+        styles.messageContent,
+        isOwnMessage ? styles.ownMessageContent : styles.otherMessageContent,
       ]}>
-        <Text style={[
-          styles.messageText,
-          isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
-        ]}>
-          {message.content}
-        </Text>
-      </View>
-
-      {/* Message status and time */}
-      <View style={[
-        styles.footer,
-        isOwnMessage ? styles.ownFooter : styles.otherFooter,
-      ]}>
-        <Text style={styles.timestamp}>
-          {formatTime(message.timestamp)}
-        </Text>
+        {message.replyedMessage && (
+          <View style={[
+            styles.replyPreviewContainer,
+            isOwnMessage ? styles.ownReplyPreview : styles.otherReplyPreview,
+          ]}>
+            <Text style={styles.replyPreviewLabel}>
+              Replying to {isOwnMessage ? investorName : 'you'}
+            </Text>
+            <Text style={[
+              styles.replyPreviewText,
+              isOwnMessage ? styles.ownReplyPreviewText : styles.otherReplyPreviewText,
+            ]} numberOfLines={2}>
+              {message.replyedMessage?.content || ''}
+            </Text>
+          </View>
+        )}
         
-        {/* {isOwnMessage && (
-          <View style={styles.statusContainer}>
-            {message.isRead ? (
-              <Image 
-                source={require('../../assets/icons/read-receipt.png')}
-                style={styles.statusIcon}
-              />
+        <View style={styles.messageBubbleRow}>
+          {isOwnMessage && (
+            <TouchableOpacity
+              style={[styles.menuButton, styles.menuButtonLeft]}
+              onPress={(event) => onPressMenu(message, event)}
+            >
+              <Text style={styles.menuButtonText}>⋮</Text>
+            </TouchableOpacity>
+          )}
+
+          <View style={[
+            styles.messageBubble,
+            isOwnMessage ? styles.ownBubble : styles.otherBubble,
+            (isImage || isDocument) && styles.mediaBubble,
+          ]}>
+            {isImage ? (
+              <TouchableOpacity activeOpacity={0.7}>
+                <Image 
+                  source={{ uri: mediaUrl }} 
+                  style={styles.mediaImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.imageOverlay}>
+                  <Image 
+                    source={require('../../assets/icons/media.png')}
+                    style={styles.imageOverlayIcon}
+                  />
+                </View>
+              </TouchableOpacity>
+            ) : isDocument ? (
+              <TouchableOpacity style={styles.documentContainer} activeOpacity={0.7}>
+                <Image 
+                  source={require('../../assets/icons/document.png')}
+                  style={styles.documentIcon}
+                />
+                <View style={styles.documentTextContainer}>
+                  <Text style={[
+                    styles.documentText,
+                    isOwnMessage ? styles.ownDocumentText : styles.otherDocumentText,
+                  ]}>
+                    Document
+                  </Text>
+                  <Text style={[
+                    styles.documentSubtext,
+                    isOwnMessage ? styles.ownDocumentSubtext : styles.otherDocumentSubtext,
+                  ]}>
+                    Tap to open
+                  </Text>
+                </View>
+              </TouchableOpacity>
             ) : (
-              <Image 
-                source={require('../../assets/icons/sent-receipt.png')}
-                style={styles.statusIcon}
-              />
+              <Text style={[
+                styles.messageText,
+                isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
+              ]}>
+                {message.replyedMessage ? message.content : 
+                 message.content.startsWith('Replying to:') ? 
+                   message.content.split('\n').slice(1).join('\n') : 
+                   message.content
+                }
+              </Text>
             )}
           </View>
-        )} */}
+
+          {!isOwnMessage && (
+            <TouchableOpacity
+              style={[styles.menuButton, styles.menuButtonRight]}
+              onPress={(event) => onPressMenu(message, event)}
+            >
+              <Text style={styles.menuButtonText}>⋮</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        
+        <View style={[
+          styles.timeContainer,
+          isOwnMessage ? styles.ownTimeContainer : styles.otherTimeContainer,
+        ]}>
+          <Text style={[
+            styles.timeText,
+            isOwnMessage ? styles.ownTimeText : styles.otherTimeText,
+          ]}>
+            {formatTime(message.timestamp)}
+            {!message.isRead && isOwnMessage && ' ○'}
+            {message.isRead && isOwnMessage && ' ✓'}
+          </Text>
+        </View>
       </View>
-    </TouchableOpacity>
+
+      {isOwnMessage && showAvatar && (
+        <View style={styles.avatarContainer}>
+          {currentUserImage ? (
+            <Image source={{ uri: currentUserImage }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+              <Text style={styles.avatarText}>
+                {'Y'}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  messageRow: {
+    flexDirection: 'row',
     marginVertical: 4,
-    marginHorizontal: 12,
-    maxWidth: '80%',
+    paddingHorizontal: 8,
+    alignItems: 'flex-start',
   },
-  ownContainer: {
-    alignSelf: 'flex-end',
+  ownMessageRow: {
+    justifyContent: 'flex-end',
   },
-  otherContainer: {
-    alignSelf: 'flex-start',
+  otherMessageRow: {
+    justifyContent: 'flex-start',
   },
-  replyContainer: {
-    padding: 8,
-    borderRadius: 8,
-    marginBottom: 4,
-    borderLeftWidth: 3,
+  avatarContainer: {
+    marginHorizontal: 8,
+    marginTop: 4,
   },
-  ownReplyContainer: {
-    backgroundColor: 'rgba(255, 69, 0, 0.1)',
-    borderLeftColor: '#FF4500',
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 25,
   },
-  otherReplyContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    borderLeftColor: '#666',
+  avatarPlaceholder: {
+    backgroundColor: '#FF4500',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  replyLabel: {
-    fontSize: 10,
-    color: '#666',
-    marginBottom: 2,
-    fontWeight: '500',
+  avatarText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
-  replyContent: {
-    fontSize: 12,
-    color: '#333',
-    fontStyle: 'italic',
+  messageContent: {
+    maxWidth: '75%',
+    flex: 1,
   },
-  bubble: {
+  ownMessageContent: {
+    alignItems: 'flex-end',
+  },
+  otherMessageContent: {
+    alignItems: 'flex-start',
+  },
+  messageBubbleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+  },
+  messageBubble: {
+    borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 18,
-    borderBottomLeftRadius: 4,
+    paddingVertical: 10,
+    marginBottom: 4,
+    maxWidth: '95%',
+    flexShrink: 1,
   },
   ownBubble: {
     backgroundColor: '#FF4500',
     borderBottomRightRadius: 4,
   },
   otherBubble: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f0f0f0',
     borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+  },
+  mediaBubble: {
+    padding: 0,
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
+  },
+  mediaImage: {
+    width: 200,
+    height: 150,
+    borderRadius: 14,
+  },
+  imageOverlay: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 12,
+    padding: 4,
+  },
+  imageOverlayIcon: {
+    width: 16,
+    height: 16,
+    tintColor: '#fff',
+  },
+  documentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    minWidth: 150,
+  },
+  documentIcon: {
+    width: 32,
+    height: 32,
+    tintColor: '#666',
+    marginRight: 12,
+  },
+  documentTextContainer: {
+    flex: 1,
+  },
+  documentText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  ownDocumentText: {
+    color: '#333',
+  },
+  otherDocumentText: {
+    color: '#333',
+  },
+  documentSubtext: {
+    fontSize: 12,
+    opacity: 0.7,
+  },
+  ownDocumentSubtext: {
+    color: '#666',
+  },
+  otherDocumentSubtext: {
+    color: '#666',
   },
   messageText: {
-    fontSize: 16,
+    fontSize: 15,
     lineHeight: 20,
   },
   ownMessageText: {
-    color: '#fff',
+    color: '#ffffff',
   },
   otherMessageText: {
-    color: '#333',
+    color: '#000',
   },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
+  menuButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginTop: 6,
   },
-  ownFooter: {
-    justifyContent: 'flex-end',
+  menuButtonRight: {
+    marginLeft: 4,
   },
-  otherFooter: {
-    justifyContent: 'flex-start',
-  },
-  timestamp: {
-    fontSize: 11,
-    color: '#999',
+  menuButtonLeft: {
     marginRight: 4,
   },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  menuButtonText: {
+    fontSize: 20,
+    color: '#666',
+    fontWeight: 'bold',
+    lineHeight: 20,
   },
-  statusIcon: {
-    width: 12,
-    height: 12,
-    tintColor: '#999',
+  replyPreviewContainer: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 6,
+    borderLeftWidth: 3,
+    maxWidth: '95%',
+  },
+  ownReplyPreview: {
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderLeftColor: '#FF4500',
+    alignSelf: 'flex-end',
+  },
+  otherReplyPreview: {
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderLeftColor:'#FF4500',
+    alignSelf: 'flex-start',
+  },
+  replyPreviewLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  replyPreviewText: {
+    fontSize: 13,
+    color: '#666',
+    opacity: 0.8,
+  },
+  ownReplyPreviewText: {
+    fontSize: 13,
+    color: '#666',
+    opacity: 0.8,
+  },
+  otherReplyPreviewText: {
+    fontSize: 13,
+    color: '#666',
+    opacity: 0.8,
+  },
+  timeContainer: {
+    marginHorizontal: 4,
+    marginTop: 2,
+  },
+  ownTimeContainer: {
+    alignItems: 'flex-end',
+  },
+  otherTimeContainer: {
+    alignItems: 'flex-start',
+  },
+  timeText: {
+    fontSize: 11,
+    color: '#999',
+  },
+  ownTimeText: {
+    color: '#999',
+  },
+  otherTimeText: {
+    color: '#999',
   },
 });
-
-export default memo(MessageBubble);

@@ -1,23 +1,27 @@
-// screens/Chat/ChatConversationScreen.tsx - PROFESSIONAL OPTIMIZED VERSION
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+// screens/Chat/ChatConversationScreen.tsx - UPDATED WITH REUSABLE COMPONENTS
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
-  TextInput,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Image,
   Alert,
-  Modal,
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useSelector, useDispatch } from 'react-redux';
 import Toast from 'react-native-toast-message';
+
+// Reusable Components
+import { ChatInput } from '../../components/chat/ChatInput';
+import { MessageBubble } from '../../components/chat/MessageBubble';
+import { MessageMenuModal } from '../../components/chat/MessageMenuModal';
+import { ChatHeader } from '../../components/chat/ChatHeader';
+
+// API & Types
 import { chatAPI } from '../../api/chatAPI';
 import { investorProfAPI } from '../../api/investorProfAPI';
 import { Message } from '../../types/chat';
@@ -42,12 +46,28 @@ import {
 type ChatConversationRouteProp = RouteProp<ChatsStackParamList, 'ChatConversation'>;
 type ChatConversationNavigationProp = StackNavigationProp<ChatsStackParamList, 'ChatConversation'>;
 
-// Memoized selectors
 const selectMessagesForUser = (state: RootState, userId: string) => 
   state.chat.messages[userId] || [];
 
 const selectPaginationForUser = (state: RootState, userId: string) => 
   state.chat.pagination[userId];
+
+// API call debouncing utility
+const useDebounce = (value: any, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+  
+  return debouncedValue;
+};
 
 const ChatConversationScreen: React.FC = () => {
   const route = useRoute<ChatConversationRouteProp>();
@@ -57,12 +77,14 @@ const ChatConversationScreen: React.FC = () => {
   const { userId, userName: initialUserName, userProfileImage: initialProfileImage, userProfileType } = route.params;
   const { userInfo } = useAuth();
 
-  // Redux state
+  // Redux state with memoized selectors
   const messages = useSelector((state: RootState) => selectMessagesForUser(state, userId));
   const isLoadingMessages = useSelector((state: RootState) => state.chat.isLoadingMessages);
   const pagination = useSelector((state: RootState) => selectPaginationForUser(state, userId));
-  const hasMore = pagination?.hasNextPage || false;
-  const pageNumber = pagination?.pageNumber || 1;
+  
+  // Memoized derived state
+  const hasMore = useMemo(() => pagination?.hasNextPage || false, [pagination]);
+  const pageNumber = useMemo(() => pagination?.pageNumber || 1, [pagination]);
 
   // SignalR
   const { isConnected: signalRConnected } = useSignalR();
@@ -80,21 +102,21 @@ const ChatConversationScreen: React.FC = () => {
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [currentUserImage, setCurrentUserImage] = useState<string>('');
   
-  // Refs - CRITICAL FOR PROPER BEHAVIOR
+  // Refs
   const flatListRef = useRef<FlatList>(null);
-  const textInputRef = useRef<TextInput>(null);
   const loadingMoreRef = useRef(false);
   const initialLoadDoneRef = useRef(false);
   const markAsReadCalledRef = useRef(false);
   const isManuallyScrollingRef = useRef(false);
   const messageCountRef = useRef(0);
+ const apiCallInProgressRef = useRef(false);
 
   const PAGE_SIZE = 20;
 
   // Image picker
   const { 
-    pickAndUploadMedia, 
-    pickAndUploadDocument, 
+    pickAndUploadChatMedia, 
+    pickAndUploadChatDocument, 
     uploading: imageUploading,
     uploadingDocument: docUploading 
   } = useImagePicker();
@@ -109,34 +131,62 @@ const ChatConversationScreen: React.FC = () => {
     return () => {
       console.log('🔚 ChatConversation unmounting');
       dispatch(setActiveUserId(null));
-      if (!markAsReadCalledRef.current) {
-        handleMarkAsRead();
-      }
+      handleMarkAsRead(); // Always attempt to mark as read on unmount
     };
   }, [userId]);
 
-  const initializeChat = async () => {
-    await getCurrentUserId();
-    await fetchInvestorProfile();
-    
-    // FIXED: Always load recent messages on mount
-    await loadRecentMessages();
-    
-    // Mark as read after loading
-    setTimeout(() => {
-      handleMarkAsRead();
-    }, 500);
+// FIXED: initializeChat with proper message loading wait
+const initializeChat = async () => {
+  console.log('🚀 [INIT] Starting chat initialization');
+  
+  const userIdResult = await getCurrentUserId();
+  
+  if (!userIdResult) {
+    console.error('❌ [INIT] Failed to get currentUserId, cannot proceed');
+    return;
+  }
+  
+  console.log('✅ [INIT] currentUserId obtained:', userIdResult);
+  
+  // Load messages first and WAIT for them to be processed
+     await Promise.allSettled([
+        loadRecentMessages(),
+        fetchInvestorProfile()
+      ]);
+  
+  // Wait for Redux state to update with messages
+  let retryCount = 0;
+  const waitForMessages = () => {
+    return new Promise((resolve) => {
+      const checkMessages = () => {
+        if (messages.length > 0 || retryCount >= 10) {
+          console.log(`✅ [INIT] Messages loaded in state: ${messages.length}`);
+          resolve(true);
+        } else {
+          retryCount++;
+          console.log(`⏳ [INIT] Waiting for messages... (attempt ${retryCount})`);
+          setTimeout(checkMessages, 300);
+        }
+      };
+      checkMessages();
+    });
   };
+  
+  await waitForMessages();
+  
+  // Then fetch profile (less critical)
+  await fetchInvestorProfile();
+  
+  // Now mark as read when messages are definitely loaded
+  console.log('✅ [INIT] All data loaded, calling handleMarkAsRead');
+  // await handleMarkAsRead();
+};
 
-  // ==================== SMART SCROLL - ONLY FOR NEW MESSAGES ====================
+  // ==================== SMART SCROLL ====================
   useEffect(() => {
     const messageCount = messages.length;
     const previousCount = messageCountRef.current;
     
-    // FIXED: Only auto-scroll when:
-    // 1. Initial load is complete AND
-    // 2. We received exactly 1 new message (not bulk loading) AND
-    // 3. User is not manually scrolling
     const receivedOneNewMessage = messageCount === previousCount + 1;
     
     if (initialLoadDoneRef.current && receivedOneNewMessage && !isManuallyScrollingRef.current) {
@@ -149,13 +199,16 @@ const ChatConversationScreen: React.FC = () => {
     messageCountRef.current = messageCount;
   }, [messages.length]);
 
-  // ==================== LOAD RECENT MESSAGES ====================
-  const loadRecentMessages = async () => {
-    if (isLoadingMessages) return;
+
+
+
+ // ==================== SMART MESSAGE LOADING ====================
+  const loadRecentMessages = useCallback(async () => {
+    if (isLoadingMessages || apiCallInProgressRef.current) return;
 
     try {
       dispatch(setLoadingMessages(true));
-      console.log('📜 Loading RECENT messages (first page only)');
+      console.log('📜 Loading RECENT messages');
 
       const response = await chatAPI.getMessageHistory({
         reciverId: userId,
@@ -167,14 +220,19 @@ const ChatConversationScreen: React.FC = () => {
       if (response.success && response.messages) {
         let recentMessages = response.messages;
         
-        // Sort by timestamp (oldest to newest)
+        // Log debug info
+        console.log('🔍 [DEBUG] Raw messages from API:');
+        recentMessages.forEach((msg, index) => {
+          console.log(`   Message ${index}: ID=${msg.messageId}, isRead=${msg.isRead}`);
+        });
+        
+        // Sort messages
         recentMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         
-        // Set messages in Redux
+        // Update Redux store
         dispatch(setMessages({ userId, messages: recentMessages }));
 
         const hasNextPage = recentMessages.length === PAGE_SIZE;
-        
         dispatch(setPagination({
           userId,
           pageNumber: 1,
@@ -183,20 +241,18 @@ const ChatConversationScreen: React.FC = () => {
           totalCount: response.totalCount || recentMessages.length
         }));
 
-        // Mark initial load as complete
         initialLoadDoneRef.current = true;
         messageCountRef.current = recentMessages.length;
 
-        // FIXED: Scroll to bottom ONCE after initial load, then never again
+        console.log(`✅ Loaded ${recentMessages.length} recent messages, hasMore: ${hasNextPage}`);
+        
+        // Auto-scroll to bottom
         setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: false });
-          console.log('✅ Scrolled to latest message');
-        }, 150);
-
-        console.log(`✅ Loaded ${recentMessages.length} recent messages, hasMore: ${hasNextPage}`);
+        }, 200);
       }
     } catch (error: any) {
-      console.error('❌ Error loading recent messages:', error);
+      console.error('❌ Error loading messages:', error);
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -205,9 +261,9 @@ const ChatConversationScreen: React.FC = () => {
     } finally {
       dispatch(setLoadingMessages(false));
     }
-  };
+  }, [userId, userProfileType, dispatch]);
 
-  // ==================== LOAD OLDER MESSAGES (ON DEMAND) ====================
+
   const loadOlderMessages = async () => {
     if (loadingMoreRef.current || !hasMore || isLoadingMessages) {
       return;
@@ -228,15 +284,11 @@ const ChatConversationScreen: React.FC = () => {
 
       if (response.success && response.messages) {
         let olderMessages = response.messages;
-        
-        // Sort older messages
         olderMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         
-        // Prepend to beginning
         dispatch(prependMessages({ userId, messages: olderMessages }));
 
         const hasNextPage = olderMessages.length === PAGE_SIZE;
-        
         dispatch(setPagination({
           userId,
           pageNumber: pageNumber + 1,
@@ -256,78 +308,139 @@ const ChatConversationScreen: React.FC = () => {
   };
 
   // ==================== PROFILE FETCHING ====================
-  const getCurrentUserId = async () => {
-    try {
-      if (userInfo?.id) {
-        setCurrentUserId(userInfo.id);
-        
-        try {
-          const profileResponse = await profileAPI.getSellerProfile();
-          if (profileResponse?.sellerProfile?.userProfileImage) {
-            setCurrentUserImage(profileResponse.sellerProfile.userProfileImage);
-          }
-        } catch (profileError) {
-          console.error('❌ Error fetching profile image:', profileError);
+const getCurrentUserId = useCallback(async (): Promise<string | null> => {
+  try {
+    if (userInfo?.id) {
+      setCurrentUserId(userInfo.id);
+      
+      // Fetch profile image in parallel or after setting user ID
+      try {
+        const profileResponse = await profileAPI.getSellerProfile();
+        if (profileResponse?.sellerProfile?.userProfileImage) {
+          setCurrentUserImage(profileResponse.sellerProfile.userProfileImage);
         }
+      } catch (profileError) {
+        console.error('❌ Error fetching profile image:', profileError);
       }
-    } catch (error) {
-      console.error('❌ Error getting userId:', error);
+      
+      return userInfo.id;
     }
-  };
+    console.error('❌ [USER ID] No userInfo available');
+    return null;
+  } catch (error) {
+    console.error('❌ [USER ID] Error getting userId:', error);
+    return null;
+  }
+}, [userInfo]);
 
-  const fetchInvestorProfile = async () => {
+const fetchInvestorProfile = useCallback(async () => {
     try {
-      const response = await investorProfAPI.getInvestorProfileById(userId);
-      if (response.success && response.investorProfile) {
-        setInvestorName(response.investorProfile.name);
-        setInvestorImage(response.investorProfile.profileImage);
+      // Only fetch if we don't have proper initial data
+      if (!initialUserName || !initialProfileImage) {
+        const response = await investorProfAPI.getInvestorProfileById(userId);
+        if (response.success && response.investorProfile) {
+          setInvestorName(response.investorProfile.name);
+          setInvestorImage(response.investorProfile.profileImage);
+        }
       }
     } catch (error) {
       console.error('❌ Error fetching investor profile:', error);
     }
-  };
+  }, [userId, initialUserName, initialProfileImage]);
 
-  // ==================== MARK AS READ ====================
-  const handleMarkAsRead = useCallback(async () => {
-    if (markAsReadCalledRef.current) return;
+
+// ==================== FIXED MARK AS READ WITH API CALL ====================
+// FIXED: handleMarkAsRead with proper message ID extraction
+const handleMarkAsRead = useCallback(async () => {
+  const effectiveCurrentUserId = currentUserId || userInfo?.id;
+  
+  if (!effectiveCurrentUserId) {
+    console.log('⏹️ [MARK READ] Skipping - no currentUserId available');
+    return;
+  }
+  
+  console.log(`📖 [MARK READ] Starting for user: ${userId}, currentUserId: ${effectiveCurrentUserId}`);
+  console.log(`📖 [MARK READ] Total messages in state: ${messages.length}`);
+  
+  try {
+    let messageIds: number[] = [];
     
-    try {
-      console.log(`📖 Marking chat as read for user: ${userId}`);
-      
-      // Mark in Redux immediately
-      dispatch(markChatAsRead({ userId }));
-      markAsReadCalledRef.current = true;
-      
-      // Find unread messages
-      const unreadMessages = messages.filter(
-        msg => !msg.isRead && msg.senderId !== userInfo?.id
-      );
-      
-      if (unreadMessages.length > 0) {
-        const messageIds = unreadMessages.map(msg => msg.messageId).filter(id => id) as number[];
+    // Only try to find unread messages if we have messages loaded
+    if (messages.length > 0) {
+      const unreadMessages = messages.filter(msg => {
+        const isUnread = msg.isRead === false;
+        const isFromOtherUser = msg.senderId === userId;
+        const isToCurrentUser = msg.receiverId === effectiveCurrentUserId;
         
-        if (messageIds.length > 0) {
-          try {
-            await chatAPI.markAsRead(messageIds);
-            dispatch(markMessagesAsRead({ userId, messageIds }));
-            console.log(`✅ Marked ${messageIds.length} messages as read`);
-          } catch (apiError) {
-            console.error('❌ Error marking messages as read via API:', apiError);
-          }
+        const shouldMark = isUnread && isFromOtherUser && isToCurrentUser;
+        
+        if (shouldMark) {
+          // FIX: Use messageId (from API) or id (from SignalR/optimistic)
+          const messageId = msg.messageId || msg.id;
+          console.log(`📖 [MARK READ] Unread message found: ${messageId} - "${msg.content}"`);
         }
-      }
-    } catch (error) {
-      console.error('❌ Error in handleMarkAsRead:', error);
+        
+        return shouldMark;
+      });
+      
+      console.log(`📖 [MARK READ] Found ${unreadMessages.length} unread messages from user: ${userId}`);
+      
+      // FIX: Properly extract message IDs
+      messageIds = unreadMessages
+        .map(msg => msg.messageId || msg.id) // Use messageId first, fallback to id
+        .filter(id => id !== undefined && id !== null && id > 0 && id < 1000000000000) as number[]; // Filter out temporary IDs
+      
+      console.log(`📖 [MARK READ] Extracted message IDs:`, messageIds);
     }
-  }, [dispatch, userId, messages, userInfo?.id]);
-
+    
+    // Only call API if we have actual message IDs
+    if (messageIds.length > 0) {
+      console.log(`📤 [MARK READ] Calling API to mark ${messageIds.length} messages as read`);
+      
+      try {
+        await chatAPI.markAsRead(messageIds); // Send raw array
+        
+        console.log(`✅ [MARK READ] API call successful - messages marked as read on server`);
+        
+        // Update Redux state after successful API call
+        dispatch(markMessagesAsRead({ userId, messageIds }));
+        
+      } catch (apiError: any) {
+        console.error('❌ [MARK READ] API Error:', apiError.message);
+        // Even if API fails, update UI for better UX
+        dispatch(markMessagesAsRead({ userId, messageIds }));
+      }
+    } else {
+      console.log('ℹ️ [MARK READ] No unread messages found to mark via API');
+      // Still update Redux UI state for consistency
+      dispatch(markChatAsRead({ userId }));
+    }
+    
+    console.log('✅ [MARK READ] Completed successfully');
+    
+  } catch (error) {
+    console.error('❌ [MARK READ] Error:', error);
+    // Still mark as read in Redux for UI consistency
+    dispatch(markChatAsRead({ userId }));
+  }
+}, [dispatch, userId, messages, currentUserId, userInfo?.id]);
+// ==================== SIMPLE MARK AS READ TRIGGER ====================
+useEffect(() => {
+  // Trigger mark as read when all conditions are met
+  if (currentUserId && messages.length > 0 && initialLoadDoneRef.current && !markAsReadCalledRef.current) {
+    console.log('🎯 [EFFECT] Conditions met, triggering mark-as-read');
+    markAsReadCalledRef.current = true;
+    handleMarkAsRead();
+  }
+}, [currentUserId, messages.length, handleMarkAsRead]);
   // ==================== SEND MESSAGE ====================
-  const handleSendMessage = async (): Promise<void> => {
+// ==================== OPTIMIZED SEND MESSAGE ====================
+  const handleSendMessage = useCallback(async (): Promise<void> => {
     if (inputText.trim() === '' || sending || !currentUserId) return;
 
     const messageContent = inputText.trim();
     
-    // Optimistic message
+    // Create optimistic message
     const tempId = Date.now();
     const optimisticMessage: Message = {
       id: tempId,
@@ -345,14 +458,13 @@ const ChatConversationScreen: React.FC = () => {
       replyedMessage: replyingTo || undefined,
     };
 
-    // Add optimistic message
+    // Update UI immediately
     dispatch(addMessage({ userId, message: optimisticMessage }));
-    
     setInputText('');
     setReplyingTo(null);
     setSending(true);
 
-    // Scroll to bottom immediately
+    // Auto-scroll
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 50);
@@ -379,14 +491,15 @@ const ChatConversationScreen: React.FC = () => {
     } finally {
       setSending(false);
     }
-  };
+  }, [inputText, sending, currentUserId, userInfo, currentUserImage, userId, investorName, investorImage, replyingTo, dispatch]);
+
 
   // ==================== MEDIA HANDLING ====================
   const handleSendImage = async () => {
     if (!currentUserId || imageUploading) return;
     
     try {
-      const mediaResult = await pickAndUploadMedia(currentUserId, 'chatMedia');
+      const mediaResult = await pickAndUploadChatMedia(currentUserId, 'chatMedia');
       
       if (mediaResult && mediaResult.type === 'image') {
         const mediaContent = `[IMAGE]${mediaResult.url}`;
@@ -408,7 +521,7 @@ const ChatConversationScreen: React.FC = () => {
     if (!currentUserId || docUploading) return;
     
     try {
-      const documentUrl = await pickAndUploadDocument(currentUserId, 'chatDocuments');
+      const documentUrl = await pickAndUploadChatDocument(currentUserId, 'chatDocuments');
       
       if (documentUrl) {
         const documentContent = `[DOCUMENT]${documentUrl}`;
@@ -430,19 +543,16 @@ const ChatConversationScreen: React.FC = () => {
   const handleScroll = (event: any) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     
-    // FIXED: Load older messages when scrolling near top
     if (contentOffset.y < 100 && hasMore && !loadingMore) {
       console.log('📜 User scrolled to top - loading older messages');
       loadOlderMessages();
     }
     
-    // Detect if user is manually scrolling (not at bottom)
     const isAtBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 50;
     
     if (!isAtBottom) {
       isManuallyScrollingRef.current = true;
     } else {
-      // User scrolled back to bottom - reset manual scroll flag
       isManuallyScrollingRef.current = false;
     }
   };
@@ -458,7 +568,6 @@ const ChatConversationScreen: React.FC = () => {
   const handleReply = () => {
     if (selectedMessage) {
       setReplyingTo(selectedMessage);
-      textInputRef.current?.focus();
     }
     setMenuVisible(false);
     setSelectedMessage(null);
@@ -544,11 +653,6 @@ const ChatConversationScreen: React.FC = () => {
     const isOwnMessage = item.senderId === currentUserId;
     const prevMessage = index > 0 ? messages[index - 1] : null;
     const showDateHeader = shouldShowDateHeader(item, prevMessage);
-    const isReply = item.replyedMessageId || item.content.startsWith('Replying to:');
-    const isImage = item.content.startsWith('[IMAGE]');
-    const isDocument = item.content.startsWith('[DOCUMENT]');
-    const mediaUrl = isImage || isDocument ? 
-      item.content.replace('[IMAGE]', '').replace('[DOCUMENT]', '') : null;
 
     return (
       <View>
@@ -558,151 +662,18 @@ const ChatConversationScreen: React.FC = () => {
           </View>
         )}
         
-        <View style={[
-          styles.messageRow,
-          isOwnMessage ? styles.ownMessageRow : styles.otherMessageRow,
-        ]}>
-          {!isOwnMessage && (
-            <View style={styles.avatarContainer}>
-              {investorImage ? (
-                <Image source={{ uri: investorImage }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                  <Text style={styles.avatarText}>
-                    {investorName?.charAt(0)?.toUpperCase() || 'U'}
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          <View style={[
-            styles.messageContent,
-            isOwnMessage ? styles.ownMessageContent : styles.otherMessageContent,
-          ]}>
-            {isReply && (
-              <View style={[
-                styles.replyPreviewContainer,
-                isOwnMessage ? styles.ownReplyPreview : styles.otherReplyPreview,
-              ]}>
-                <Text style={styles.replyPreviewLabel}>
-                  Replying to {isOwnMessage ? investorName : 'you'}
-                </Text>
-                <Text style={[
-                  styles.replyPreviewText,
-                  isOwnMessage ? styles.ownReplyPreviewText : styles.otherReplyPreviewText,
-                ]} numberOfLines={2}>
-                  {item.replyedMessage?.content || ''}
-                </Text>
-              </View>
-            )}
-            
-            <View style={styles.messageBubbleRow}>
-              {isOwnMessage && (
-                <TouchableOpacity
-                  style={[styles.menuButton, styles.menuButtonLeft]}
-                  onPress={(event) => showMessageMenu(item, event)}
-                >
-                  <Text style={styles.menuButtonText}>⋮</Text>
-                </TouchableOpacity>
-              )}
-
-              <View style={[
-                styles.messageBubble,
-                isOwnMessage ? styles.ownBubble : styles.otherBubble,
-                (isImage || isDocument) && styles.mediaBubble,
-              ]}>
-                {isImage ? (
-                  <TouchableOpacity activeOpacity={0.7}>
-                    <Image 
-                      source={{ uri: mediaUrl }} 
-                      style={styles.mediaImage}
-                      resizeMode="cover"
-                    />
-                    <View style={styles.imageOverlay}>
-                      <Image 
-                        source={require('../../assets/icons/media.png')}
-                        style={styles.imageOverlayIcon}
-                      />
-                    </View>
-                  </TouchableOpacity>
-                ) : isDocument ? (
-                  <TouchableOpacity style={styles.documentContainer} activeOpacity={0.7}>
-                    <Image 
-                      source={require('../../assets/icons/document.png')}
-                      style={styles.documentIcon}
-                    />
-                    <View style={styles.documentTextContainer}>
-                      <Text style={[
-                        styles.documentText,
-                        isOwnMessage ? styles.ownDocumentText : styles.otherDocumentText,
-                      ]}>
-                        Document
-                      </Text>
-                      <Text style={[
-                        styles.documentSubtext,
-                        isOwnMessage ? styles.ownDocumentSubtext : styles.otherDocumentSubtext,
-                      ]}>
-                        Tap to open
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ) : (
-                  <Text style={[
-                    styles.messageText,
-                    isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
-                  ]}>
-                    {item.replyedMessage ? item.content : 
-                     item.content.startsWith('Replying to:') ? 
-                       item.content.split('\n').slice(1).join('\n') : 
-                       item.content
-                    }
-                  </Text>
-                )}
-              </View>
-
-              {!isOwnMessage && (
-                <TouchableOpacity
-                  style={[styles.menuButton, styles.menuButtonRight]}
-                  onPress={(event) => showMessageMenu(item, event)}
-                >
-                  <Text style={styles.menuButtonText}>⋮</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            
-            <View style={[
-              styles.timeContainer,
-              isOwnMessage ? styles.ownTimeContainer : styles.otherTimeContainer,
-            ]}>
-              <Text style={[
-                styles.timeText,
-                isOwnMessage ? styles.ownTimeText : styles.otherTimeText,
-              ]}>
-                {formatTime(item.timestamp)}
-                {!item.isRead && isOwnMessage && ' ○'}
-                {item.isRead && isOwnMessage && ' ✓'}
-              </Text>
-            </View>
-          </View>
-
-          {isOwnMessage && (
-            <View style={styles.avatarContainer}>
-              {currentUserImage ? (
-                <Image source={{ uri: currentUserImage }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                  <Text style={styles.avatarText}>
-                    {userInfo?.name?.charAt(0)?.toUpperCase() || 'Y'}
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-        </View>
+        <MessageBubble
+          message={item}
+          isOwnMessage={isOwnMessage}
+          investorName={investorName}
+          investorImage={investorImage}
+          currentUserImage={currentUserImage}
+          onPressMenu={showMessageMenu}
+          formatTime={formatTime}
+        />
       </View>
     );
-  }, [currentUserId, investorName, investorImage, userInfo?.name, currentUserImage, messages, showMessageMenu, formatDateHeader, formatTime]);
+  }, [currentUserId, investorName, investorImage, currentUserImage, messages, showMessageMenu, formatDateHeader]);
 
   // ==================== LOADING STATE ====================
   if (isLoadingMessages && messages.length === 0) {
@@ -718,27 +689,12 @@ const ChatConversationScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.customHeader}>
-        <View style={styles.headerUserInfo}>
-          {investorImage ? (
-            <Image source={{ uri: investorImage }} style={styles.headerAvatar} />
-          ) : (
-            <View style={[styles.headerAvatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarText}>
-                {investorName?.charAt(0)?.toUpperCase() || 'U'}
-              </Text>
-            </View>
-          )}
-          <View>
-            <Text style={styles.headerUserName}>{investorName}</Text>
-            {/* <Text style={[styles.connectionStatus, { 
-              color: signalRConnected ? 'green' : 'orange' 
-            }]}>
-              ● {signalRConnected ? 'Real-time active' : 'Standard mode'}
-            </Text> */}
-          </View>
-        </View>
-      </View>
+      <ChatHeader 
+        userName={investorName}
+        userImage={investorImage}
+        status="Real-time active"
+        connectionStatus={signalRConnected}
+      />
 
       {/* Messages List */}
       <FlatList
@@ -771,132 +727,111 @@ const ChatConversationScreen: React.FC = () => {
         }
       />
 
-      {/* Menu Modal */}
-      <Modal
+      {/* Message Menu Modal */}
+      <MessageMenuModal
         visible={menuVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setMenuVisible(false)}
-      >
-        <TouchableOpacity 
-          style={styles.menuOverlay}
-          activeOpacity={1}
-          onPress={() => setMenuVisible(false)}
-        >
-          <View style={[styles.menuContainer, { top: menuPosition.y, left: menuPosition.x }]}>
-            <TouchableOpacity 
-              style={[styles.menuItem, styles.menuButtonContainer]}
-              onPress={handleReply}
-            >
-              <Image
-                source={require('../../assets/icons/reply.png')}
-                style={styles.menuIcon}
-              />
-              <Text style={styles.menuItemText}>Reply</Text>
-            </TouchableOpacity>
-            
-            {selectedMessage?.senderId === currentUserId && (
-              <TouchableOpacity 
-                style={[styles.menuItem, styles.menuItemDanger, styles.menuButtonContainer]}
-                onPress={handleDeleteMessage}
-              >
-                <Image
-                  source={require('../../assets/icons/delete.png')}
-                  style={styles.deleteIcon}
-                />
-                <Text style={[styles.menuItemText, styles.menuItemTextDanger]}>Delete</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </TouchableOpacity>
-      </Modal>
+        position={menuPosition}
+        selectedMessage={selectedMessage}
+        isOwnMessage={selectedMessage?.senderId === currentUserId}
+        onClose={() => setMenuVisible(false)}
+        onReply={handleReply}
+        onDelete={handleDeleteMessage}
+      />
 
       {/* Input Container */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
         style={styles.keyboardAvoidingView}
       >
-        {replyingTo && (
-          <View style={styles.replyPreview}>
-            <View style={styles.replyPreviewContent}>
-              <Text style={styles.replyPreviewLabel}>Replying to:</Text>
-              <Text style={styles.replyPreviewText} numberOfLines={1}>
-                {replyingTo.content}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={cancelReply} style={styles.replyPreviewClose}>
-              <Text style={styles.replyPreviewCloseText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <View style={styles.inputContainer}>
-          <View style={styles.attachmentButtonsContainer}>
-            <TouchableOpacity 
-              style={styles.attachmentButton}
-              onPress={handleSendImage}
-              disabled={imageUploading}
-            >
-              {imageUploading ? (
-                <ActivityIndicator size="small" color="#054274ff" />
-              ) : (
-                <Image 
-                  source={require('../../assets/icons/media.png')}
-                  style={styles.attachmentIcon}
-                />
-              )}
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.attachmentButton}
-              onPress={handleSendDocument}
-              disabled={docUploading}
-            >
-              {docUploading ? (
-                <ActivityIndicator size="small" color="#054274ff" />
-              ) : (
-                <Image 
-                  source={require('../../assets/icons/document.png')}
-                  style={styles.attachmentIcon}
-                />
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <TextInput
-            ref={textInputRef}
-            style={styles.textInput}
-            placeholder="Write a message"
-            placeholderTextColor="#999"
-            value={inputText}
-            onChangeText={setInputText}
-            multiline
-            maxLength={1000}
-            returnKeyType="send"
-            editable={!sending}
-            onSubmitEditing={handleSendMessage}
-          />
-          
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (inputText.trim() === '' || sending) && styles.sendButtonDisabled
-            ]}
-            onPress={handleSendMessage}
-            disabled={inputText.trim() === '' || sending}
-          >
-            {sending ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.sendIcon}>➤</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        <ChatInput
+          inputText={inputText}
+          onInputChange={setInputText}
+          onSendMessage={handleSendMessage}
+          replyingTo={replyingTo}
+          onCancelReply={cancelReply}
+          onSendImage={handleSendImage}
+          onSendDocument={handleSendDocument}
+          sending={sending}
+          imageUploading={imageUploading}
+          docUploading={docUploading}
+          placeholder="Write a message"
+          showAttachments={true}
+        />
       </KeyboardAvoidingView>
     </View>
   );
 };
+
+// Styles remain the same as your original, just keeping the essential ones
+// const styles = StyleSheet.create({
+//   container: {
+//     flex: 1,
+//     backgroundColor: '#f8f9fa',
+//   },
+//   centered: {
+//     flex: 1,
+//     justifyContent: 'center',
+//     alignItems: 'center',
+//     padding: 20,
+//   },
+//   loadingText: {
+//     marginTop: 12,
+//     fontSize: 16,
+//     color: '#666',
+//     fontWeight: '500',
+//   },
+//   messagesList: {
+//     paddingVertical: 16,
+//     paddingHorizontal: 8,
+//     paddingBottom: 80,
+//   },
+//   dateHeaderContainer: {
+//     alignItems: 'center',
+//     marginVertical: 16,
+//   },
+//   dateHeaderText: {
+//     fontSize: 12,
+//     color: '#999',
+//     backgroundColor: '#f0f0f0',
+//     paddingHorizontal: 12,
+//     paddingVertical: 6,
+//     borderRadius: 12,
+//     fontWeight: '500',
+//   },
+//   keyboardAvoidingView: {
+//     position: 'absolute',
+//     bottom: 0,
+//     left: 0,
+//     right: 0,
+//   },
+//   emptyContainer: {
+//     flex: 1,
+//     justifyContent: 'center',
+//     alignItems: 'center',
+//     paddingTop: 100,
+//     paddingHorizontal: 40,
+//   },
+//   emptyTitle: {
+//     fontSize: 18,
+//     fontWeight: '600',
+//     color: '#666',
+//     marginBottom: 8,
+//     textAlign: 'center',
+//   },
+//   emptySubtitle: {
+//     fontSize: 14,
+//     color: '#999',
+//     textAlign: 'center',
+//     lineHeight: 20,
+//   },
+//   loadMoreContainer: {
+//     padding: 10,
+//     alignItems: 'center',
+//   },
+// });
+
+
 
 // Your existing styles remain exactly the same...
 const styles = StyleSheet.create({
@@ -955,7 +890,7 @@ const styles = StyleSheet.create({
   messagesList: {
     paddingVertical: 16,
     paddingHorizontal: 8,
-    paddingBottom: 80,
+    paddingBottom: 100,
   },
   dateHeaderContainer: {
     alignItems: 'center',
@@ -1262,6 +1197,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+     backgroundColor: '#f8f9fa', // Add background color
+    paddingBottom: Platform.OS === 'ios' ? 20 : 10, // Add safe area padding
   },
   inputContainer: {
     flexDirection: 'row',

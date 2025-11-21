@@ -176,48 +176,39 @@ const ChatsScreen: React.FC = () => {
   };
 
   // FIXED: Handle chat opening with proper badge reset
-  const handleChatOpen = useCallback(async (chat: ChatUser) => {
-    console.log('📱 [Inbox] Opening chat with:', chat.userName);
-    
-    try {
-      // Mark chat as read in Redux immediately
-      if (chat.unreadCount > 0) {
-        console.log(`📖 Marking ${chat.unreadCount} messages as read for user: ${chat.userId}`);
-        
-        // FIXED: Use markChatAsRead to properly update Redux state
-        dispatch(markChatAsRead({ userId: chat.userId }));
-        
-        // FIXED: Also call API to mark as read on server
-        try {
-          // Find unread messages for this chat and mark them via API
-          // This ensures server knows messages are read
-          const unreadMessageIds = []; // You would need to get these from your state
-          if (unreadMessageIds.length > 0) {
-            await chatAPI.markAsRead(unreadMessageIds);
-          }
-        } catch (apiError) {
-          console.error('❌ Error marking messages as read via API:', apiError);
-          // Don't show error - continue with navigation
-        }
-      }
+// In ChatsScreen.tsx - FIXED handleChatOpen
+const handleChatOpen = useCallback(async (chat: ChatUser) => {
+  console.log('📱 [Inbox] Opening chat with:', chat.userName);
+  
+  try {
+    // Mark chat as read in Redux immediately for better UX
+    if (chat.unreadCount > 0) {
+      console.log(`📖 Marking ${chat.unreadCount} messages as read for user: ${chat.userId}`);
+      dispatch(markChatAsRead({ userId: chat.userId }));
       
-      // Navigate to chat conversation
-      navigation.navigate('ChatConversation', {
-        userId: chat.userId,
-        userName: chat.userName || 'User',
-        userProfileImage: chat.userProfileImage,
-        userProfileType: chat.userProfileType || 1,
-      });
-      
-    } catch (error) {
-      console.error('❌ Error opening chat:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to open chat',
-      });
+      // FIX: Also refresh chats to get updated unread count from server
+      setTimeout(() => {
+        loadChats(); // Reload chats to sync with server
+      }, 1000);
     }
-  }, [dispatch, navigation]);
+    
+    // Navigate to chat conversation
+    navigation.navigate('ChatConversation', {
+      userId: chat.userId,
+      userName: chat.userName || 'User',
+      userProfileImage: chat.userProfileImage,
+      userProfileType: chat.userProfileType || 1,
+    });
+    
+  } catch (error) {
+    console.error('❌ Error opening chat:', error);
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: 'Failed to open chat',
+    });
+  }
+}, [dispatch, navigation, loadChats]);
 
   // FIXED: Memoized time formatter
   const formatTime = useCallback((timestamp: string) => {
@@ -269,17 +260,7 @@ const ChatsScreen: React.FC = () => {
           </View>
         )}
         
-        {/* Professional badge - only show for unread messages */}
-        {item.unreadCount > 0 && (
-          <View style={[
-            styles.badge,
-            item.unreadCount > 9 && styles.badgeLarge
-          ]}>
-            <Text style={styles.badgeText}>
-              {item.unreadCount > 9 ? '9+' : item.unreadCount}
-            </Text>
-          </View>
-        )}
+    
       </View>
 
       <View style={styles.contentContainer}>
@@ -296,6 +277,18 @@ const ChatsScreen: React.FC = () => {
           ]}>
             {formatTime(item.lastMessageTime)}
           </Text>
+
+              {/* Professional badge - only show for unread messages */}
+        {item.unreadCount > 0 && (
+          <View style={[
+            styles.badge,
+            item.unreadCount > 9 && styles.badgeLarge
+          ]}>
+            <Text style={styles.badgeText}>
+              {item.unreadCount > 9 ? '9+' : item.unreadCount}
+            </Text>
+          </View>
+        )}
         </View>
         <Text style={[
           styles.lastMessage,
@@ -362,13 +355,13 @@ const ChatsScreen: React.FC = () => {
       </TouchableOpacity>
 
       {/* Connection Status */}
-      {!signalRConnected && (
+      {/* {!signalRConnected && (
         <View style={styles.connectionWarning}>
-          {/* <Text style={styles.connectionWarningText}>
+          <Text style={styles.connectionWarningText}>
             ● {isConnecting ? 'Connecting to real-time chat...' : 'Real-time updates unavailable'}
-          </Text> */}
+          </Text>
         </View>
-      )}
+      )} */}
 
       {/* Chat List */}
       <FlatList
@@ -534,7 +527,7 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: -4,
+    top: 18,
     right: -4,
     backgroundColor: '#FF4500',
     borderRadius: 12,

@@ -24,38 +24,50 @@ export const marketplaceAPI = {
    * Send a marketplace message about a property
    * POST /api/MarketPlaceMessage/SendMarketPlaceMessage
    */
-  sendMarketPlaceMessage: async (
-    data: SendMarketPlaceMessageRequest
-  ): Promise<SendMarketPlaceMessageResponse> => {
-    try {
-      console.log('📤 [Marketplace] Sending message:', {
-        receiverId: data.receiverId,
-        propertyId: data.propertyId,
-        contentLength: data.content.length,
-      });
+// In marketplaceAPI.ts - update the sendMarketPlaceMessage function
+sendMarketPlaceMessage: async (
+  data: SendMarketPlaceMessageRequest
+): Promise<SendMarketPlaceMessageResponse> => {
+  try {
+    console.log('📤 [Marketplace] Sending message:', {
+      receiverId: data.receiverId,
+      propertyId: data.propertyId,
+      contentLength: data.content.length,
+    });
 
-      const response = await apiClient.post<SendMarketPlaceMessageResponse>(
-        '/MarketPlaceMessage/SendMarketPlaceMessage',
-        null,
-        {
-          params: {
-            receiverId: data.receiverId,
-            propertyId: data.propertyId,
-            content: data.content,
-            ...(data.replyedMessageId && { replyedMessageId: data.replyedMessageId }),
-          },
-        }
-      );
+    const response = await apiClient.post<SendMarketPlaceMessageResponse>(
+      '/MarketPlaceMessage/SendMarketPlaceMessage',
+      null,
+      {
+        params: {
+          receiverId: data.receiverId,
+          propertyId: data.propertyId,
+          content: data.content,
+          ...(data.replyedMessageId && { replyedMessageId: data.replyedMessageId }),
+        },
+      }
+    );
 
-      console.log('✅ [Marketplace] Message sent successfully');
-      return response.data;
-    } catch (error: any) {
-      console.error('❌ [Marketplace] Send message error:', error.response?.data || error.message);
-      throw new Error(
-        error.response?.data?.message || 'Failed to send message. Please try again.'
-      );
-    }
-  },
+    console.log('✅ [Marketplace] Message sent successfully, response:', response.data);
+    
+    // FIX: Handle different response structures
+    const apiResponse = response.data;
+    
+    // If the API returns just { success: true } without data, that's fine
+    // The real message will come via SignalR
+    return {
+      success: apiResponse.success !== false,
+      message: apiResponse.message,
+      data: apiResponse.data // This might be undefined, which is OK
+    };
+    
+  } catch (error: any) {
+    console.error('❌ [Marketplace] Send message error:', error.response?.data || error.message);
+    throw new Error(
+      error.response?.data?.message || 'Failed to send message. Please try again.'
+    );
+  }
+},
 
   /**
    * Get message history for a property conversation

@@ -98,25 +98,31 @@ export const chatAPI = {
     }
   },
 
-  // Mark messages as read - EXACTLY AS IN SWAGGER
-  markAsRead: async (messageIds: number[]): Promise<MarkAsReadResponse> => {
-    try {
-      console.log('✅ Marking messages as read:', messageIds);
-      const response = await apiClient.post<MarkAsReadResponse>(
-        '/Chat/MarkAsRead',
-        { messageIds }
-      );
-      console.log('✅ Mark as read response:', response.data);
-      return response.data;
-    } catch (error: any) {
-      console.error('❌ Mark as read error:', error.response?.data || error.message);
-      throw new Error(
-        error.response?.data?.message ||
-        'Failed to mark messages as read.'
-      );
-    }
-  },
-
+// This is probably the correct format
+markAsRead: async (messageIds: number[]): Promise<MarkAsReadResponse> => {
+  try {
+    console.log('✅ Marking messages as read:', messageIds);
+    
+    // Send as DTO object with messageIds property
+    const requestData = {
+      messageIds: messageIds
+    };
+    
+    const response = await apiClient.post<MarkAsReadResponse>(
+      '/Chat/MarkAsRead',
+      requestData
+    );
+    
+    console.log('✅ Mark as read response:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Mark as read error:', error.response?.data || error.message);
+    throw new Error(
+      error.response?.data?.message ||
+      'Failed to mark messages as read.'
+    );
+  }
+},
   // Get unread messages count - EXACTLY AS IN SWAGGER
   getUnreadCount: async (userId: string): Promise<UnreadCountResponse> => {
     try {

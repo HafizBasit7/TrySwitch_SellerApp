@@ -84,6 +84,30 @@ const ListingsScreen: React.FC<ListingsScreenProps> = ({ navigation }) => {
 // };
 
 
+const getListingStatus = (item: PropertyListing) => {
+
+  // 1. Deleted always overrides everything
+  if (item.isDeleted) {
+    return "Deleted";
+  }
+
+  // 2. Sold overrides expired
+  if (item.soldStatus?.toLowerCase() === "sold") {
+    return "Sold";
+  }
+
+  // 3. Expired
+  const isDateExpired = item.expireDate && new Date(item.expireDate) < new Date();
+  if (item.isExpired || isDateExpired) {
+    return "Expired";
+  }
+
+  // 4. Otherwise Available
+  return "Available";
+};
+
+
+
  const checkPhoneVerificationStatus = async () => {
     try {
       setCheckingVerification(true);
@@ -243,19 +267,24 @@ const ListingsScreen: React.FC<ListingsScreenProps> = ({ navigation }) => {
     }
   };
 
-  const getStatusColor = (status?: string) => {
-    switch (status?.toLowerCase()) {
-      case 'available':
-      case 'active':
-        return '#22c55e'; 
-      case 'expired':
-        return '#FF4500';
-      case 'sold':
-        return '#ef4444';
-      default:
-        return '#22c55e'; 
-    }
-  };
+const getStatusColor = (status: string) => {
+  switch (status.toLowerCase()) {
+    case "deleted":
+      return "#6b7280"; // gray
+
+    case "expired":
+      return "#f97316"; // orange
+
+    case "sold":
+      return "#ef4444"; // red
+
+    case "available":
+    case "active":
+    default:
+      return "#22c55e"; // green
+  }
+};
+
 
   const formatPrice = (price: number) => {
     return `$${price?.toLocaleString() || '0'}`;
@@ -276,6 +305,7 @@ const ListingsScreen: React.FC<ListingsScreenProps> = ({ navigation }) => {
     const isVideo = hasValidImage && isVideoUrl(imageUrl);
     const validImageCount = item.imageCount || 0;
     const videoCount = item.videoCount || 0;
+    const status = getListingStatus(item);
 
     return (
       <TouchableOpacity 
@@ -326,6 +356,7 @@ const ListingsScreen: React.FC<ListingsScreenProps> = ({ navigation }) => {
             )}
           </View>
         </View>
+        
 
         {/* Right Side - Details */}
         <View style={styles.detailsSection}>
@@ -334,9 +365,10 @@ const ListingsScreen: React.FC<ListingsScreenProps> = ({ navigation }) => {
             <Text style={styles.address} numberOfLines={1}>
               {item.propertyAddress || 'No Address'}
             </Text>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.soldStatus) }]}>
-              <Text style={styles.statusText}>{item.soldStatus || 'Active'}</Text>
-            </View>
+            
+           <View style={[styles.statusBadge, { backgroundColor: getStatusColor(status) }]}>
+  <Text style={styles.statusText}>{status}</Text>
+</View>
           </View>
 
           {/* Property Info Icons Row */}
