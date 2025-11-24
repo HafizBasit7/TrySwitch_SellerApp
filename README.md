@@ -12,11 +12,36 @@ This is a new [**React Native**](https://reactnative.dev) project, bootstrapped 
 Below are some preview screenshots of the app in action.
 Each row contains three images for a clean, professional layout:
 
-<p align="center"> <img src="./screenshots/List.jpg" width="30%" /> <img src="./screenshots/ListDet.jpg" width="30%" /> <img src="./screenshots/Followers.jpg" width="30%" /> </p> <p align="center"> <img src="./screenshots/Chat.jpg" width="30%" /> <img src="./screenshots/convers.jpg" width="30%" /> <img src="./screenshots/Task.jpg" width="30%" /> </p>
+<p align="center">
+  <img src="./screenshots/List.jpg" width="30%" />
+  <img src="./screenshots/ListDet.jpg" width="30%" />
+  <img src="./screenshots/Followers.jpg" width="30%" />
+</p>
 
-<p align="center"> <img src="./screenshots/Profile.jpg" width="30%" /> <img src="./screenshots/SideBar.jpg" width="30%" /> <img src="./screenshots/Prof.jpg" width="30%" /> </p>
+<p align="center">
+  <img src="./screenshots/Chat.jpg" width="30%" />
+  <img src="./screenshots/convers.jpg" width="30%" />
+  <img src="./screenshots/Task.jpg" width="30%" />
+</p>
 
-<p align="center"> <img src="./screenshots/screen1.jpg" width="30%" /> <img src="./screenshots/screen2.jpg" width="30%" /> <img src="./screenshots/screen3.jpg" width="30%" /> </p> <p align="center"> <img src="./screenshots/screen4.jpg" width="30%" /> <img src="./screenshots/screen5.jpg" width="30%" /> <img src="./screenshots/screen6.jpg" width="30%" /> </p>
+<p align="center">
+  <img src="./screenshots/Profile.jpg" width="30%" />
+  <img src="./screenshots/SideBar.jpg" width="30%" />
+  <img src="./screenshots/Prof.jpg" width="30%" />
+</p>
+
+<p align="center">
+  <img src="./screenshots/screen1.jpg" width="30%" />
+  <img src="./screenshots/screen2.jpg" width="30%" />
+  <img src="./screenshots/screen3.jpg" width="30%" />
+</p>
+
+<p align="center">
+  <img src="./screenshots/screen4.jpg" width="30%" />
+  <img src="./screenshots/screen5.jpg" width="30%" />
+  <img src="./screenshots/screen6.jpg" width="30%" />
+</p>
+
 
 
 📝 Tip: Place your screenshots in a screenshots/ folder at the root of your project.
